@@ -1,0 +1,149 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 10
+      Plane Cell Count: 20
+      Reference Frame: odom
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: true
+      Show Names: false
+    - Class: rviz_default_plugins/PointCloud2
+      Name: cells near (5 cm)
+      Enabled: true
+      Topic:
+        Value: /adaptmap/cells/near
+        Depth: 1
+        Reliability Policy: Reliable
+      Color Transformer: RGB8
+      Style: Boxes
+      Size (m): 0.05
+      Alpha: 1
+    - Class: rviz_default_plugins/PointCloud2
+      Name: cells high (10 cm)
+      Enabled: true
+      Topic:
+        Value: /adaptmap/cells/high
+        Depth: 1
+        Reliability Policy: Reliable
+      Color Transformer: RGB8
+      Style: Boxes
+      Size (m): 0.1
+      Alpha: 1
+    - Class: rviz_default_plugins/PointCloud2
+      Name: cells mid (25 cm)
+      Enabled: true
+      Topic:
+        Value: /adaptmap/cells/mid
+        Depth: 1
+        Reliability Policy: Reliable
+      Color Transformer: RGB8
+      Style: Boxes
+      Size (m): 0.25
+      Alpha: 1
+    - Class: rviz_default_plugins/PointCloud2
+      Name: cells far (50 cm)
+      Enabled: true
+      Topic:
+        Value: /adaptmap/cells/far
+        Depth: 1
+        Reliability Policy: Reliable
+      Color Transformer: RGB8
+      Style: Boxes
+      Size (m): 0.5
+      Alpha: 1
+    - Class: rviz_default_plugins/PointCloud2
+      Name: labeled cloud
+      Enabled: false
+      Topic:
+        Value: /adaptmap/labeled_cloud
+        Depth: 1
+        Reliability Policy: Reliable
+      Color Transformer: RGB8
+      Style: Points
+      Size (Pixels): 2
+    - Class: rviz_default_plugins/Map
+      Name: nav grid
+      Enabled: false
+      Topic:
+        Value: /adaptmap/nav_grid
+        Depth: 1
+        Reliability Policy: Reliable
+      Color Scheme: costmap
+      Alpha: 0.7
+    - Class: grid_map_rviz_plugin/GridMap
+      Name: grid near
+      Enabled: false
+      Topic:
+        Value: /adaptmap/grid/near
+        Depth: 1
+        Reliability Policy: Reliable
+      Height Layer: elevation
+      Color Layer: color
+      Color Transformer: ColorLayer
+      Show Grid Lines: false
+      Alpha: 1
+    - Class: grid_map_rviz_plugin/GridMap
+      Name: grid high
+      Enabled: false
+      Topic:
+        Value: /adaptmap/grid/high
+        Depth: 1
+        Reliability Policy: Reliable
+      Height Layer: elevation
+      Color Layer: color
+      Color Transformer: ColorLayer
+      Show Grid Lines: false
+      Alpha: 1
+    - Class: grid_map_rviz_plugin/GridMap
+      Name: grid mid
+      Enabled: false
+      Topic:
+        Value: /adaptmap/grid/mid
+        Depth: 1
+        Reliability Policy: Reliable
+      Height Layer: elevation
+      Color Layer: color
+      Color Transformer: ColorLayer
+      Show Grid Lines: false
+      Alpha: 1
+    - Class: grid_map_rviz_plugin/GridMap
+      Name: grid far
+      Enabled: false
+      Topic:
+        Value: /adaptmap/grid/far
+        Depth: 1
+        Reliability Policy: Reliable
+      Height Layer: elevation
+      Color Layer: color
+      Color Transformer: ColorLayer
+      Show Grid Lines: false
+      Alpha: 1
+  Enabled: true
+  Global Options:
+    Fixed Frame: odom
+    Background Color: 30; 30; 35
+    Frame Rate: 30
+  Tools:
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/SetGoal
+  Views:
+    Current:
+      Class: rviz_default_plugins/ThirdPersonFollower
+      Target Frame: base_link
+      Distance: 45
+      Pitch: 0.75
+      Yaw: 3.6
+      Focal Point:
+        X: 8
+        Y: 0
+        Z: 0
+Window Geometry:
+  Width: 1600
+  Height: 950

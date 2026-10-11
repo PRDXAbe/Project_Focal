@@ -1,0 +1,34 @@
+# AdaptMap configuration. Distances in metres, times in seconds.
+
+device: cuda
+
+preprocess:
+  min_range: 0.5          # drop self-hits / near-field noise
+  max_range: 100.0        # sensor + map limit
+  z_min: -3.0             # ROI height window relative to sensor
+  z_max: 5.0
+  self_box: [-0.6, 0.6, -0.45, 0.45, -2.0, 0.3]   # robot body box in sensor frame (xmin,xmax,ymin,ymax,zmin,zmax)
+  outlier_voxel: 0.4      # voxel size for isolation filter
+  outlier_min_pts: 2      # voxels with fewer points (and no neighbours) are dropped
+  constant_intensity: 0.25  # sim intensity is unrealistic; feed the model a dataset-like mean
+  adaptive_downsample: false  # compute-side foveation before segmentation
+
+# Foveated zones: nested squares around the robot (Chebyshev distance).
+# Each zone's cell size ~ HDL-64 horizontal point spacing at its outer edge.
+zones:
+  - {name: near, half_extent: 10.0,  cell: 0.05}
+  - {name: high, half_extent: 30.0,  cell: 0.10}
+  - {name: mid,  half_extent: 50.0,  cell: 0.25}
+  - {name: far,  half_extent: 100.0, cell: 0.50}
+
+fusion:
+  tau_static: 20.0        # weight time-constant for static classes
+  tau_dynamic: 0.5        # vehicles / pedestrians fade fast -> no ghost trails
+  max_weight: 10.0        # cap so the map stays responsive
+  min_weight: 0.05        # below this a cell is considered unknown
+  conf_support: 3.0       # observations needed for full confidence
+
+model:
+  backend: mmdet3d_minkunet   # mmdet3d_minkunet | geometric
+  config: checkpoints/minkunet.py
+  checkpoint: checkpoints/minkunet.pth

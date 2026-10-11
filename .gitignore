@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# ROS 2 / colcon build outputs
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Large / generated (see README "Not in this repo")
+data/
+checkpoints/*.pth
+docs/figures/*.mp4
+
+# Local-only files
+*.pdf
+/2.5D.png
+/3D.png

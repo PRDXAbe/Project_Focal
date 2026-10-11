@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>adaptmap_ros</name>
+  <version>0.1.0</version>
+  <description>AdaptMap: foveated variable-resolution 2.5D semantic LiDAR mapping node.</description>
+  <maintainer email="prdx.abe@gmail.com">LORENZINI</maintainer>
+  <license>Proprietary</license>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>visualization_msgs</exec_depend>
+  <exec_depend>grid_map_msgs</exec_depend>
+  <exec_depend>grid_map_rviz_plugin</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>adaptmap_sim</exec_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>
