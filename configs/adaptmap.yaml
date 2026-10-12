@@ -70,6 +70,13 @@ terrain:
 
 model:
   backend: mmdet3d_minkunet   # mmdet3d_minkunet | geometric
+  # simulation: MinkUNet fine-tuned on auto-labelled Gazebo scans (10 AdaptMap classes, tools/finetune.py).
+  # real sensors: the SemanticKITTI-pretrained model below in `model_real` (tools/run_dataset.py and
+  # tools/eval_semanticposs.py use it); the sim model was trained with constant intensity.
+  config: checkpoints/minkunet_adapt10.py
+  checkpoint: checkpoints/minkunet_adapt10.pth
+  half: true               # fp16 inference: ~2.4x faster, 99.95 % identical labels
+
+model_real:
   config: checkpoints/minkunet.py
   checkpoint: checkpoints/minkunet.pth
-  half: true               # fp16 inference: ~2.4x faster, 99.95 % identical labels

@@ -1,0 +1,21 @@
+{
+ "drive": "2011_09_26_drive_0005_sync",
+ "scans": 154,
+ "latency_ms": {
+  "pre": 2.2,
+  "seg": 41.3,
+  "fuse": 8.6
+ },
+ "total_ms": 52.1,
+ "hz": 19.2,
+ "points_raw": 121708,
+ "points_after_preprocess": 121163,
+ "map": {
+  "layers": null,
+  "total_cells": 702400,
+  "uniform_cells": 16000000,
+  "reduction": 22.779043280182233,
+  "map_bytes": 50400000,
+  "cleared": 1
+ }
+}

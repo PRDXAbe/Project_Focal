@@ -1,0 +1,62 @@
+[
+ {
+  "model": "pretrained (SemanticKITTI)",
+  "scans": 598,
+  "accuracy": 0.7826299071311951,
+  "miou": 0.4360971450805664,
+  "iou": {
+   "ground": 0.701066255569458,
+   "vegetation": 0.6645835638046265,
+   "building_wall": 0.704528272151947,
+   "pole": 0.3777165710926056,
+   "vehicle": 0.5364659428596497,
+   "pedestrian": 0.06831962615251541,
+   "other_obstacle": 0.0
+  }
+ },
+ {
+  "model": "fine-tuned v1 (sim)",
+  "scans": 598,
+  "accuracy": 0.1947466880083084,
+  "miou": 0.06162145733833313,
+  "iou": {
+   "ground": 0.09994720667600632,
+   "vegetation": 0.11880020797252655,
+   "building_wall": 0.0047964295372366905,
+   "pole": 0.024395611137151718,
+   "vehicle": 0.17332834005355835,
+   "pedestrian": 0.009612304158508778,
+   "other_obstacle": 0.00047008757246658206
+  }
+ },
+ {
+  "model": "fine-tuned v2 (sim)",
+  "scans": 598,
+  "accuracy": 0.27697938680648804,
+  "miou": 0.11029072105884552,
+  "iou": {
+   "ground": 0.02435602806508541,
+   "vegetation": 0.1956854611635208,
+   "building_wall": 0.1522207260131836,
+   "pole": 0.176254004240036,
+   "vehicle": 0.2033700793981552,
+   "pedestrian": 0.016713330522179604,
+   "other_obstacle": 0.0034354340750724077
+  }
+ },
+ {
+  "model": "fine-tuned v2 (sim), constant intensity",
+  "scans": 598,
+  "accuracy": 0.6114165186882019,
+  "miou": 0.38295260071754456,
+  "iou": {
+   "ground": 0.6309576630592346,
+   "vegetation": 0.3288715183734894,
+   "building_wall": 0.48066046833992004,
+   "pole": 0.26171791553497314,
+   "vehicle": 0.4104730188846588,
+   "pedestrian": 0.5336006283760071,
+   "other_obstacle": 0.03438686206936836
+  }
+ }
+]

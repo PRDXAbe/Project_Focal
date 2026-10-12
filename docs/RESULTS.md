@@ -1,96 +1,90 @@
 # AdaptMap — Results
 
-Offline benchmark (`python tools/benchmark.py --frames 300`): simulated 10 Hz drive at 2.0 m/s through the urban test world, 64-beam KITTI-like LiDAR at 1.75 m, moving pedestrians. Hardware: RTX 4050 Laptop (6 GB), PyTorch 2.1 / CUDA 12.1.
+All numbers come from the JSON files the evaluation tools write (see `tools/make_results.py`).
+Hardware: RTX 4050 Laptop GPU (6 GB), PyTorch 2.1 / CUDA 12.1, ROS 2 Humble, Gazebo Harmonic.
 
-## Map size: foveated vs uniform
+## Map size and speed (offline benchmark)
 
-| | Uniform 5 cm | AdaptMap foveated | Reduction |
+Simulated 10 Hz drive through the urban world (`tools/benchmark.py`); a uniform 5 cm map is fed the same data.
+
+| | Uniform 5 cm | AdaptMap | Gain |
 |---|---|---|---|
-| Cells (200 x 200 m window) | 16,000,000 | 702,400 | 22.8x |
-| Map memory | 671 MB | 35 MB | 19.0x |
-| Occupied cells at end of run | 1,041,784 | 216,634 | 4.8x |
-| Fusion time per scan (mean / p95) | 22.4 / 33.9 ms | 3.7 / 5.3 ms | 6.1x |
+| Cells (200 × 200 m) | 16,000,000 | 702,400 | 22.8× |
+| Map memory | 916 MB | 48 MB | 19.0× |
+| Map update per scan | 40.0 ms | 7.4 ms | 5.4× |
 
-Per-zone layout:
-
-| Zone | Extent (Chebyshev) | Cell | Cells |
-|---|---|---|---|
-| near | 0–10 m | 5 cm | 160,000 |
-| high | 10–30 m | 10 cm | 320,000 |
-| mid | 30–50 m | 25 cm | 102,400 |
-| far | 50–100 m | 50 cm | 120,000 |
+| Stage (per scan) | Mean (ms) |
+|---|---|
+| Preprocess | 1.5 |
+| Segmentation (MinkUNet-34, fp16) | 28.5 |
+| Foveated fusion (incl. ray clearing) | 7.4 |
+| **Total** | **37.5 (27 Hz)** |
 
 ![cells](figures/cells_memory.png)
 
-## Latency
-
-| Stage | Mean (ms) | p95 (ms) |
-|---|---|---|
-| Preprocess | 1.6 | 2.0 |
-| Segmentation (MinkUNet-34, spconv) | 69.8 | 78.7 |
-| Foveated fusion | 3.7 | 5.3 |
-| **End-to-end** | **75.1** (13.3 Hz) | |
-
-Mean points per scan: 129,177 raw → 129,128 after preprocessing. Peak GPU memory (model + both maps): 1,854 MB.
-
 ![latency](figures/latency.png)
 
-## Segmentation accuracy (simulation)
+## Speed-adaptive zones
 
-Pretrained SemanticKITTI MinkUNet-34 (69.3 mIoU on real SemanticKITTI val, per mmdet3d model zoo), applied zero-shot to simulated scans. Point accuracy **69.1%**, mIoU **25.8%** over classes present.
+The 5 cm zone follows reaction + braking distance (`adaptive_zones` in the config).
 
-| Class | IoU |
-|---|---|
-| road | 79.1% |
-| sidewalk_curb | 67.6% |
-| terrain | 3.0% |
-| vegetation | 0.5% |
-| building_wall | 53.0% |
-| pole | 24.5% |
-| vehicle | 4.5% |
-| pedestrian | 0.0% |
-| other_obstacle | 0.0% |
+| Speed | 5 cm zone radius | Cells | vs uniform 5 cm | Map update |
+|---|---|---|---|---|
+| 1 m/s (4 km/h) | 10 m | 702,400 | 22.8× fewer | 7.1 ms |
+| 3 m/s (11 km/h) | 10 m | 702,400 | 22.8× fewer | 7.8 ms |
+| 5 m/s (18 km/h) | 15.5 m | 870,700 | 18.4× fewer | 8.6 ms |
+| 8 m/s (29 km/h) | 25 m | 1,332,400 | 12.0× fewer | 9.6 ms |
 
-Known sim-to-real gap: the analytic ray-caster models cars/pedestrians/crates as plain boxes, which the real-data model reads as walls; the Gazebo world uses real car and walking-person meshes. Closing the gap is what `tools/autolabel.py` + `tools/finetune.py` are for (phase P8).
+## Live ROS 2 + Gazebo
 
-![iou](figures/class_iou.png)
-
-## Map snapshot
-
-![map](figures/map_topdown.png)
-
-## Segmentation accuracy on Gazebo scans
-
-131 scans from a recorded demo lap (`tools/eval_bag.py`), every 3rd scan. Gazebo renders real car and walking-person meshes; ground truth comes from the world manifest (`tools/autolabel.py`). Pretrained SemanticKITTI weights, zero-shot. Point accuracy **89.2%**, mIoU **44.5%**.
-
-| Class | IoU | GT points | Most confused with |
-|---|---|---|---|
-| road | 93.2% | 4,941,608 | sidewalk_curb |
-| sidewalk_curb | 84.4% | 3,698,884 | road |
-| terrain | 7.0% | 675,905 | sidewalk_curb |
-| vegetation | 0.5% | 15,353 | building_wall |
-| building_wall | 87.1% | 4,929,014 | sidewalk_curb |
-| pole | 34.9% | 292,458 | building_wall |
-| vehicle | 70.9% | 1,875,277 | building_wall |
-| pedestrian | 22.5% | 18,486 | sidewalk_curb |
-| other_obstacle | 0.0% | 243,520 | building_wall |
-
-## Live ROS 2 + Gazebo run
-
-Scripted lap through the Gazebo world (`tools/capture_demo.sh`): Gazebo, RViz, the video renderer and AdaptMap all on one RTX 4050 laptop. 592 scans processed over 110 s of sim time (**5.4 scans/s**; the node always takes the newest scan, LiDAR runs at ~8.5 Hz).
+Scripted lap with Gazebo, RViz and the video renderer on the same laptop GPU: **6.0 scans/s** integrated (675 scans, the LiDAR produces ~10/s; the node always takes the newest).
 
 | Stage | Mean (ms) | p95 (ms) |
 |---|---|---|
-| Preprocess | 13.1 | 31.6 |
-| Segmentation | 122.4 | 172.7 |
-| Foveated fusion | 8.3 | 15.8 |
-| **Pipeline total** | 143.8 | 211.7 |
-| ROS publishing (every 3rd scan) | 95.3 | 197.1 |
+| preprocess | 20.2 | 49.1 |
+| segment | 101.5 | 247.9 |
+| fuse | 24.0 | 59.1 |
+| total | 145.8 | 346.0 |
 
-Peak GPU memory 445 MB. Points per scan after preprocessing 127,038. Observed map cells at end of lap 256,126 (of 702,400 foveated cells; a uniform 5 cm map would hold 16,000,000).
-
-Segmentation is slower live than offline (75 ms) because the GPU is shared with Gazebo's LiDAR rendering and the GUIs.
-
-Demo video: [figures/demo.mp4](figures/demo.mp4) — left: semantic classes per zone, right: elevation.
+Publishing runs on its own thread (178 ms per snapshot, 0 dropped). Peak GPU memory 348 MB. Without visualisation the mapping core alone kept up with the sensor at 9.3 scans/s (58 ms/scan).
 
 ![live](figures/demo_frame.png)
+
+## Semantic segmentation
+
+### Simulation, held-out world (seed 21)
+
+Fine-tuned on auto-labelled scans from 12 randomised training worlds (`tools/gen_training_data.sh`, `tools/finetune.py`: 10-class AdaptMap head initialised from the KITTI classifier, class-balanced loss, distillation from the pretrained model). The test world was never used for training.
+
+| Model | road | sidewalk curb | terrain | vegetation | building wall | pole | vehicle | pedestrian | other obstacle | **mIoU** |
+|---|---|---|---|---|---|---|---|---|---|---|
+| pretrained (KITTI head mapped) | 68 | 74 | 9 | 0 | 73 | 57 | 34 | 60 | 44 | **46.6** |
+| fine-tuned v1: 6 worlds (iter 9000) | 94 | 98 | 94 | 39 | 96 | 92 | 81 | 62 | 75 | **81.1** |
+| fine-tuned v2: 12 worlds + distillation, default (iter 7500) | 77 | 98 | 95 | 34 | 89 | 86 | 46 | 63 | 75 | **73.8** |
+
+v1 scores higher on this world but fails on the demo world's pickup truck (its flat bed is called road); v2 is the better model across both held-out worlds.
+
+### Simulation, demo world (second held-out world, recorded lap)
+
+| Model | road | sidewalk curb | terrain | vegetation | building wall | pole | vehicle | pedestrian | other obstacle | **mIoU** |
+|---|---|---|---|---|---|---|---|---|---|---|
+| pretrained (SemanticKITTI) | 96 | 85 | 6 | 1 | 84 | 35 | 77 | 79 | 0 | **51.4** |
+| fine-tuned v1 (6 worlds) | 78 | 98 | 90 | 43 | 87 | 89 | 54 | 84 | 96 | **79.9** |
+| fine-tuned v2 (12 worlds + distillation, default) | 98 | 99 | 91 | 61 | 98 | 90 | 98 | 80 | 97 | **90.2** |
+
+### Real data: SemanticPOSS (labelled, 40-beam Pandora, university campus)
+
+SemanticPOSS has one 'ground' class, so road / sidewalk / terrain are merged. Different sensor (40 beams) and scene type (campus) than the KITTI training data; no SemanticPOSS data was used for training.
+
+| Model | ground | vegetation | building wall | pole | vehicle | pedestrian | other obstacle | **mIoU** |
+|---|---|---|---|---|---|---|---|---|
+| pretrained (SemanticKITTI) | 70 | 66 | 70 | 38 | 54 | 7 | 0 | **43.6** |
+| fine-tuned v1 (sim) | 10 | 12 | 0 | 2 | 17 | 1 | 0 | **6.2** |
+| fine-tuned v2 (sim) | 2 | 20 | 15 | 18 | 20 | 2 | 0 | **11.0** |
+| fine-tuned v2 (sim), constant intensity | 63 | 33 | 48 | 26 | 41 | 53 | 3 | **38.3** |
+
+## Real data: KITTI raw drive 2011_09_26_drive_0005_sync
+
+154 real HDL-64 scans with GPS/IMU poses through the full pipeline (`tools/run_dataset.py`): preprocess 2.2 ms, segmentation 41.3 ms, fusion 8.6 ms, total **52.1 ms (19.2 Hz)**; 121,708 raw → 121,163 points per scan.
+
+![kitti](figures/kitti_2011_09_26_drive_0005_sync.png)

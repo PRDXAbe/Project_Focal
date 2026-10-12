@@ -39,6 +39,12 @@ def main():
           "rendering and the GUIs.", "",
           "Demo video: [figures/demo.mp4](figures/demo.mp4) — left: semantic classes per zone, right: elevation.", "",
           "![live](figures/demo_frame.png)", ""]
+    (ROOT / "docs" / "live_summary.json").write_text(json.dumps({
+        "scans": len(r), "sim_seconds": span, "scans_per_s": len(r) / span,
+        "mean_ms": {k: st.mean(x["timing_ms"][k] for x in r) for k in ("preprocess", "segment", "fuse", "total")},
+        "p95_ms": {k: pct([x["timing_ms"][k] for x in r]) for k in ("preprocess", "segment", "fuse", "total")},
+        "publish_ms": st.mean(pub) if pub else None, "publish_dropped": dropped,
+        "gpu_mem_mb": max(x["gpu_mem_mb"] for x in r)}, indent=1))
     res = ROOT / "docs" / "RESULTS.md"
     txt = res.read_text()
     cut = txt.find(HEAD)

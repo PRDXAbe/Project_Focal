@@ -149,6 +149,41 @@ Things to try:
   the viewer. The ramp shows as tiles that rise steadily instead of jumping in a block. The rover
   can't climb the 15 cm curb, so look rather than drive there.
 
+## Let the robot drive itself (Nav2)
+
+Once, install Nav2 (needs your password): `sudo bash scripts/install_nav2.sh`.
+
+```bash
+cd ~/Projects/Project_Focal
+source /opt/ros/humble/setup.bash && source ros2_ws/install/setup.bash
+ros2 launch adaptmap_nav nav.launch.py
+```
+
+When RViz is up, click **2D Goal Pose** in the toolbar, then click-and-drag on the road where you
+want the robot to go. You'll see:
+
+- **cyan line**: the planned route (global plan), recomputed as the map changes;
+- **yellow line**: what the controller is following right now;
+- the robot keeping to the road. Curbs are "blocked" in the costmap, so it never climbs onto the
+  sidewalk;
+- it steering around parked cars and crates, and slowing near obstacles.
+
+A goal *on* the sidewalk can't be reached: there's no way up the curb, and Nav2 reports failure
+instead of driving onto it.
+
+To see what the planner sees, run the 3D viewer at the same time (`.venv/bin/python
+tools/view25d.py`) and choose **Colour tiles by: Traversability**:
+
+| Colour | Meaning |
+|---|---|
+| pale | free road |
+| darker orange | more costly (sidewalk, grass, slopes, rough ground) |
+| dark red | blocked (walls, cars, curbs, steep slopes) |
+
+Automatic check of five scenarios (pedestrian crossing, passing the lane car, refusing a sidewalk
+goal, a long route, a U-turn), with pass/fail and safety distances:
+`.venv/bin/python tools/nav_scenarios.py` (while nav is running).
+
 ## Known mistakes you will see
 
 The neural network was trained on real city data (Germany, SemanticKITTI) and hasn't been retrained

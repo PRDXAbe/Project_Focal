@@ -1,0 +1,9 @@
+[
+{"speed": 1.0, "near_radius_m": 10.0, "cells": 702400, "latency_ms": {"pre": 1.5, "seg": 28.2, "fuse": 7.1, "uni_fuse": 0.0}, "pts_in": 126557, "miou": 40.2, "acc": 65.8, "iou": {"road": 72.4, "sidewalk_curb": 42.1, "terrain": 44.0, "vegetation": 51.1, "building_wall": 58.3, "pole": 86.6, "vehicle": 2.8, "pedestrian": 0.0, "other_obstacle": 4.5}}
+,
+{"speed": 3.0, "near_radius_m": 10.0, "cells": 702400, "latency_ms": {"pre": 1.6, "seg": 27.6, "fuse": 7.8, "uni_fuse": 0.0}, "pts_in": 127141, "miou": 41.1, "acc": 65.6, "iou": {"road": 66.3, "sidewalk_curb": 45.8, "terrain": 33.7, "vegetation": 41.7, "building_wall": 67.8, "pole": 83.6, "vehicle": 8.3, "pedestrian": 0.0, "other_obstacle": 22.8}}
+,
+{"speed": 5.0, "near_radius_m": 15.5, "cells": 870700, "latency_ms": {"pre": 1.6, "seg": 28.4, "fuse": 8.6, "uni_fuse": 0.0}, "pts_in": 128829, "miou": 42.6, "acc": 70.7, "iou": {"road": 77.0, "sidewalk_curb": 52.3, "terrain": 32.1, "vegetation": 35.6, "building_wall": 70.5, "pole": 83.7, "vehicle": 6.3, "pedestrian": 0.0, "other_obstacle": 25.9}}
+,
+{"speed": 8.0, "near_radius_m": 25.0, "cells": 1332400, "latency_ms": {"pre": 1.6, "seg": 29.1, "fuse": 9.6, "uni_fuse": 0.0}, "pts_in": 129146, "miou": 43.6, "acc": 71.0, "iou": {"road": 74.2, "sidewalk_curb": 56.8, "terrain": 29.3, "vegetation": 35.7, "building_wall": 71.4, "pole": 84.9, "vehicle": 6.9, "pedestrian": 0.0, "other_obstacle": 33.0}}
+]

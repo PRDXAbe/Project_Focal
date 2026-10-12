@@ -1,0 +1,53 @@
+[
+ {
+  "model": "pretrained (SemanticKITTI)",
+  "scans": 131,
+  "accuracy": 0.8918281197547913,
+  "miou": 0.5138458609580994,
+  "iou": {
+   "road": 0.9580236673355103,
+   "sidewalk_curb": 0.8473859429359436,
+   "terrain": 0.05584775283932686,
+   "vegetation": 0.005304782185703516,
+   "building_wall": 0.841274082660675,
+   "pole": 0.35131463408470154,
+   "vehicle": 0.7706728577613831,
+   "pedestrian": 0.7947888970375061,
+   "other_obstacle": 0.0
+  }
+ },
+ {
+  "model": "fine-tuned v1 (6 worlds)",
+  "scans": 131,
+  "accuracy": 0.908469021320343,
+  "miou": 0.7989535927772522,
+  "iou": {
+   "road": 0.778648853302002,
+   "sidewalk_curb": 0.9827869534492493,
+   "terrain": 0.9018955230712891,
+   "vegetation": 0.4310644865036011,
+   "building_wall": 0.8713927268981934,
+   "pole": 0.8895978927612305,
+   "vehicle": 0.5378244519233704,
+   "pedestrian": 0.8388346433639526,
+   "other_obstacle": 0.9585369229316711
+  }
+ },
+ {
+  "model": "fine-tuned v2 (12 worlds + distillation, default)",
+  "scans": 131,
+  "accuracy": 0.9871302843093872,
+  "miou": 0.9018988013267517,
+  "iou": {
+   "road": 0.976948082447052,
+   "sidewalk_curb": 0.9859639406204224,
+   "terrain": 0.9117504954338074,
+   "vegetation": 0.6122313141822815,
+   "building_wall": 0.9793291687965393,
+   "pole": 0.8981629014015198,
+   "vehicle": 0.9820935130119324,
+   "pedestrian": 0.8018018007278442,
+   "other_obstacle": 0.9688082933425903
+  }
+ }
+]

@@ -57,8 +57,14 @@ def main():
     ap.add_argument("bag")
     ap.add_argument("--every", type=int, default=3)
     ap.add_argument("--no-write", action="store_true")
+    ap.add_argument("--checkpoint")
+    ap.add_argument("--config")
+    ap.add_argument("--name", default="pretrained", help="model label stored in --json")
+    ap.add_argument("--json", help="append {name, accuracy, miou, iou} to this JSON list")
     a = ap.parse_args()
     cfg = load_config()
+    if a.checkpoint:
+        cfg["model"]["checkpoint"], cfg["model"]["config"] = a.checkpoint, a.config
     seg = build_segmenter(cfg)
     C = classes.NUM_CLASSES
     conf = torch.zeros(C, C, dtype=torch.long, device="cuda")
@@ -79,6 +85,14 @@ def main():
     miou = float(iou[1:][present[1:]].mean())
     acc = float(tp.sum() / conf.sum())
     print(f"{n} Gazebo scans: point accuracy {100*acc:.1f}%, mIoU {100*miou:.1f}%")
+    if a.json:
+        import json
+        out = Path(a.json)
+        allr = json.loads(out.read_text()) if out.exists() else []
+        allr = [r for r in allr if r["model"] != a.name] + [{
+            "model": a.name, "scans": n, "accuracy": acc, "miou": miou,
+            "iou": {classes.NAMES[i]: float(iou[i]) for i in range(1, C) if present[i]}}]
+        out.write_text(json.dumps(allr, indent=1))
     rows = []
     for i in range(1, C):
         if present[i]:

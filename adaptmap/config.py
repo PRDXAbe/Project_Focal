@@ -10,8 +10,10 @@ DEFAULT_CONFIG = ROOT / "configs" / "adaptmap.yaml"
 def load_config(path=None):
     with open(path or DEFAULT_CONFIG) as f:
         cfg = yaml.safe_load(f)
-    for key in ("config", "checkpoint"):
-        p = Path(cfg["model"][key])
-        if not p.is_absolute():
-            cfg["model"][key] = str(ROOT / p)
+    for section in ("model", "model_real"):
+        for key in ("config", "checkpoint"):
+            if section in cfg and key in cfg[section]:
+                p = Path(cfg[section][key])
+                if not p.is_absolute():
+                    cfg[section][key] = str(ROOT / p)
     return cfg

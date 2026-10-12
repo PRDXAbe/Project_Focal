@@ -6,7 +6,10 @@ Data: tools/record_labeled.py output, <data>/sequences/<world>/{velodyne/*.bin, 
 The SemanticKITTI 19-class classifier is replaced by a 10-class one whose rows start from each
 AdaptMap class's main KITTI class (road<-road, vehicle<-car, pedestrian<-person, ...), so training
 starts from the pretrained behaviour; `other_obstacle` (no KITTI equivalent) starts from building/
-fence with a lower bias, and `unknown` is never predicted. Loss: class-balanced cross-entropy.
+fence with a lower bias, and `unknown` is never predicted. Loss: class-balanced cross-entropy, plus
+(--distill) a distillation term that keeps the student close to the frozen pretrained model wherever
+that teacher is confident and doesn't contradict the label - so knowledge the sim worlds don't
+cover (e.g. a pickup's flat bed is still a vehicle) isn't forgotten.
 
 Usage:
   .venv/bin/python tools/finetune.py --data data/sim_adapt --test data/sim_adapt_test --iters 6000
@@ -117,6 +120,8 @@ def main():
     ap.add_argument("--eval-every", type=int, default=500)
     ap.add_argument("--eval-scans", type=int, default=60)
     ap.add_argument("--out", default=str(ROOT / "checkpoints" / "minkunet_adapt10.pth"))
+    ap.add_argument("--distill", type=float, default=1.0, help="weight of the teacher-distillation term (0 = off)")
+    ap.add_argument("--distill-conf", type=float, default=0.8)
     a = ap.parse_args()
     cfg = load_config()
     train, test = scans(a.data), scans(a.test)
@@ -134,6 +139,13 @@ def main():
 
     model = build_model(cfg)
     model.train()
+    teacher = None
+    if a.distill > 0:
+        from mmdet3d.apis import init_model
+        teacher = init_model(cfg["model"]["config"], cfg["model"]["checkpoint"], device="cuda:0")
+        teacher.eval()
+        for q in teacher.parameters():
+            q.requires_grad_(False)
     head_params = list(model.decode_head.conv_seg.parameters())
     rest = [p for n, p in model.named_parameters() if not n.startswith("decode_head.conv_seg")]
     opt = torch.optim.AdamW([{"params": rest, "lr": a.lr * 0.2}, {"params": head_params, "lr": a.lr}], weight_decay=0.01)
@@ -152,6 +164,17 @@ def main():
             logits = model.decode_head.forward(model.extract_feat(d["inputs"]))
         target = torch.cat([x.gt_pts_seg.voxel_semantic_mask for x in d["data_samples"]]).long()
         loss = F.cross_entropy(logits.float(), target, weight=weight, ignore_index=0)
+        kd = torch.zeros((), device="cuda")
+        if teacher is not None:
+            with torch.no_grad(), torch.autocast("cuda", dtype=torch.float16):
+                tl = teacher.decode_head.forward(teacher.extract_feat(d["inputs"]))
+            tp = classes.kitti_probs_to_adapt(torch.softmax(tl.float(), 1))
+            tconf, targ = tp.max(1)
+            m = (tconf > a.distill_conf) & ((target == 0) | (targ == target))
+            if m.any():
+                ls = torch.log_softmax(logits.float()[m], 1)
+                kd = (torch.xlogy(tp[m], tp[m]) - tp[m] * ls).sum(1).mean()
+            loss = loss + a.distill * kd
         opt.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
         scaler.unscale_(opt)
@@ -160,7 +183,7 @@ def main():
         scaler.update()
         sched.step()
         if it % 50 == 0:
-            print(f"iter {it}/{a.iters} loss {loss.item():.3f} ({(time.time() - t0) / it:.2f} s/it)", flush=True)
+            print(f"iter {it}/{a.iters} loss {loss.item():.3f} kd {kd.item():.3f} ({(time.time() - t0) / it:.2f} s/it)", flush=True)
         if it % a.eval_every == 0 or it == a.iters:
             miou, iou = evaluate(model, test, a.crop, a.eval_scans)
             history.append({"iter": it, "miou": miou, "iou": iou})

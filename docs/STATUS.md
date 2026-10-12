@@ -1,0 +1,65 @@
+# Project status, last updated 2026-10-12
+
+Plan: phases P1–P9 (completion plan, approved 2026-10-12). Every phase is committed and pushed
+separately.
+
+## Checklist
+
+### Done ✅
+| Phase | What | Key result |
+|---|---|---|
+| P0 | 1-day prototype: sim world + rover, pipeline, foveated map, ROS node, docs | `ceeb782` |
+| P1 | Performance: fp16 MinkUNet, async publishing, topic parameters | segmentation 65 → 27 ms; offline 37.5 ms/scan (27 Hz); mapping core live 9.3 scans/s |
+| P2 | Map quality: ray clearing, ground surface, height above ground, clearance under overhangs, ring-gap hole filling | 6 tests |
+| P3 | Terrain: slope, step, roughness, curb detection, traversability costmap (`/adaptmap/costmap`) | 5 tests; viewer "Traversability" colouring |
+| P4 | Fine-tune for AdaptMap's 10 classes: seeded worlds, live auto-labelling (ground-contact fix), 10-class head, distillation | held-out demo world mIoU 51.4 → **90.2**; world 21: 46.6 → 73.8 |
+| P6 | Real data | KITTI drive 0005: full pipeline 52 ms/scan (19 Hz) + video. SemanticPOSS: pretrained 43.6 mIoU; sim model with constant intensity 38.3 (pedestrians 7 → 53 %) |
+| P7 | Speed-adaptive zones (`set_zones`, `ZonePolicy`) | 5 cm zone 10 m → 15.5 m @ 5 m/s → 25 m @ 8 m/s (1.33 M cells) |
+| P8 (part) | CI (GitHub Actions, CPU pytest), launch_testing smoke test (3/3 pass), `make_results.py`, README/METHOD/TESTING updates | |
+
+### Not done ⬜ (next steps, in order)
+1. **P5 Nav2: blocked on install.** The user runs `sudo bash scripts/install_nav2.sh`, then:
+   - `cd ros2_ws && colcon build --symlink-install`
+   - `ros2 launch adaptmap_nav nav.launch.py`, and check that a "2D Goal Pose" click in RViz
+     drives the rover;
+   - tune `ros2_ws/src/adaptmap_nav/params/nav2.yaml` if needed. Likely suspects: whether the
+     StaticLayer accepts the rolling costmap, `trinary_costmap: false`, inflation;
+   - `.venv/bin/python tools/nav_scenarios.py` → `docs/nav_results.json` → `make_results.py`;
+   - record a Nav2 demo video (`view25d.py --video ... --color cost`).
+2. **P4 follow-up.** v2 scores only 46 % on world-21 vehicles (v1: 81 %). Find which car or
+   object type fails, the way the demo-world pickup case was diagnosed (confusion rows + nearest
+   manifest object; that script was a scratchpad file). Options: more worlds with that vehicle
+   type, a lower distillation weight (0.3), or combining v1 + v2 data.
+3. **Real-data accuracy (optional).** Fine-tune on mixed sim + SemanticPOSS sequences 00–04,
+   with intensity dropout/augmentation, testing on 05. This would give one model for both sim and
+   real data.
+4. **P8 polish:**
+   - `docs/TESTING.md` "Does it make the robot faster?" still quotes old numbers (70 ms
+     segmentation). Update from `docs/results.json` / `live_summary.json`.
+   - `docs/METHOD.md` §6–8: refresh the results summary and add claims for ray clearing,
+     clearance, ring-gap filling, speed-adaptive resampling, the auto-labelling pipeline and
+     distillation.
+   - Final demo videos into `docs/figures/` (not in git: `*.mp4` is ignored; decide whether to
+     add them).
+5. **P9 (optional).** A more complex robot URDF (e.g. a Husky description, or Go2 + CHAMP). Only
+   the extrinsics (`lidar_offset`), topics and footprint should need changing.
+6. **Housekeeping.** `data/demo_20261010_211904` (1.6 GB, aborted run) can be deleted. Keep
+   `data/demo_20261010_212110/bag`: it's the demo-world evaluation set.
+
+## Where things are
+| Thing | Location |
+|---|---|
+| Models | `checkpoints/minkunet.pth` (pretrained, real data), `minkunet_adapt10.pth` = `_v2.pth` (sim default), `_v1.pth` (6 worlds, no distillation); training logs `data/finetune*.log` |
+| Sim training data | `data/sim_adapt/sequences/urban_s{11..16,31..36}` (4,139 scans, 11 GB), test `data/sim_adapt_test/sequences/urban_s21` (245) |
+| Real data | `data/real/kitti_raw/2011_09_26/...drive_0005_sync`, `data/real/semanticposs/dataset` |
+| Demo-world eval bag | `data/demo_20261010_212110/bag` |
+| Result JSONs | `docs/*.json` → `python3 tools/make_results.py` → `docs/RESULTS.md` |
+| Plan file | `~/.claude/plans/lorenzini-sih-ppt-pdf-ok-refactored-plum.md` |
+
+## Headline numbers (from docs/RESULTS.md)
+- **Map:** 702,400 cells vs 16 M uniform (22.8× fewer), 19× less memory, map update 6× faster.
+- **Offline pipeline:** 37.5 ms/scan (27 Hz). Live with Gazebo + visualisation: 6.0 scans/s.
+  Mapping core alone: 9.3 scans/s (the sensor rate).
+- **Segmentation, demo world:** 90.2 mIoU (fine-tuned v2) vs 51.4 (pretrained).
+- **Real data:** KITTI 19 Hz end to end; SemanticPOSS 43.6 mIoU (pretrained, unseen 40-beam
+  sensor).

@@ -103,6 +103,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
 
     cfg = load_config()
+    cfg["model"].update(cfg["model_real"])  # real sensors: SemanticKITTI-pretrained model
     cfg["preprocess"]["constant_intensity"] = None              # keep real reflectance
     cfg["preprocess"]["self_box"] = [-2.7, 1.3, -1.0, 1.0, -2.0, 0.3]  # the KITTI car around the roof LiDAR
     seg = build_segmenter(cfg)
@@ -158,6 +159,7 @@ def main():
                "hz": round(1000 / sum(m.values()), 1), "points_raw": int(np.mean([x["raw"] for x in tim])),
                "points_after_preprocess": int(np.mean([x["pts"] for x in tim])), "map": fmap.stats() | {"layers": None}}
     (out / "summary.json").write_text(json.dumps(summary, indent=1, default=str))
+    (ROOT / "docs" / f"kitti_{drive.name}_summary.json").write_text(json.dumps(summary, indent=1, default=str))
     print(json.dumps(summary, default=str))
     print(f"wrote {video}")
 

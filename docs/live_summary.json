@@ -1,0 +1,20 @@
+{
+ "scans": 675,
+ "sim_seconds": 112.0,
+ "scans_per_s": 6.026785714285714,
+ "mean_ms": {
+  "preprocess": 20.224266666666665,
+  "segment": 101.51096296296296,
+  "fuse": 24.029244444444444,
+  "total": 145.77001481481483
+ },
+ "p95_ms": {
+  "preprocess": 49.07,
+  "segment": 247.87,
+  "fuse": 59.11,
+  "total": 345.96
+ },
+ "publish_ms": 177.636,
+ "publish_dropped": 0,
+ "gpu_mem_mb": 347.8
+}
