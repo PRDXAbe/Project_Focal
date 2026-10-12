@@ -57,11 +57,11 @@ def run(args, cfg):
         lab, prob = seg.segment(clean)
         sync(); t2 = time.perf_counter()
         xyz = clean[:, :3] + torch.tensor([x, y, SENSOR_H], device="cuda")
-        fov.integrate(xyz, prob, [x, y], t)
+        fov.integrate(xyz, prob, [x, y], t, origin=[x, y, SENSOR_H])
         sync(); t3 = time.perf_counter()
         tu = 0.0
         if uni is not None:
-            uni.integrate(xyz, prob, [x, y], t)
+            uni.integrate(xyz, prob, [x, y], t, origin=[x, y, SENSOR_H])
             sync(); tu = time.perf_counter() - t3
         if f < 3:  # warm-up (spconv kernel tuning)
             continue

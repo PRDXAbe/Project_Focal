@@ -16,10 +16,12 @@ preprocess:
 # Foveated zones: nested squares around the robot (Chebyshev distance).
 # Each zone's cell size ~ HDL-64 horizontal point spacing at its outer edge.
 zones:
-  - {name: near, half_extent: 10.0,  cell: 0.05}
-  - {name: high, half_extent: 30.0,  cell: 0.10}
-  - {name: mid,  half_extent: 50.0,  cell: 0.25}
-  - {name: far,  half_extent: 100.0, cell: 0.50}
+# fill_radius: how far (m) ground may be interpolated across a hole between LiDAR rings; grows with
+# distance because ring spacing grows (~0.4 m at 10 m, 1.6 m at 20 m, 3.6 m at 30 m).
+  - {name: near, half_extent: 10.0,  cell: 0.05, fill_radius: 0.3}
+  - {name: high, half_extent: 30.0,  cell: 0.10, fill_radius: 1.0}
+  - {name: mid,  half_extent: 50.0,  cell: 0.25, fill_radius: 2.0}
+  - {name: far,  half_extent: 100.0, cell: 0.50, fill_radius: 3.0}
 
 fusion:
   tau_static: 20.0        # weight time-constant for static classes
@@ -27,6 +29,16 @@ fusion:
   max_weight: 10.0        # cap so the map stays responsive
   min_weight: 0.05        # below this a cell is considered unknown
   conf_support: 3.0       # observations needed for full confidence
+  ground_radius: 2.0      # interpolate ground under objects from ground cells within this radius
+  # ray clearing: rays that pass through a stored obstacle (above its bottom, below its top) clear it
+  ray_clearing: true
+  clear_ray_stride: 8     # use every 8th point as a ray
+  clear_samples: 32       # samples per ray
+  clear_range: 50.0       # only rays up to this length
+  clear_margin: 0.2       # ray must be this far inside the obstacle span (m)
+  clear_end_margin: 0.3   # ignore samples this close to the ray's end point (m)
+  clear_min_hits: 1
+  clear_factor: 0.5       # weight multiplier per scan for contradicted cells
 
 model:
   backend: mmdet3d_minkunet   # mmdet3d_minkunet | geometric

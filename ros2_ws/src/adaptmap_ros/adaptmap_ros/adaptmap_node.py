@@ -76,10 +76,13 @@ def grid_map_msg(view, name, header):
     m.info.pose.position.y = oy + n * res / 2
     m.info.pose.orientation.w = 1.0
     cls = view["class"].cpu().numpy()
-    valid = view["valid"].cpu().numpy()
+    valid = view["known"].cpu().numpy()  # observed or hole-filled
     layers = {
         "elevation": view["elevation"].cpu().numpy(),
         "ground": view["ground"].cpu().numpy(),
+        "height_above_ground": view["hag"].cpu().numpy(),
+        "clearance": view["clearance"].cpu().numpy(),
+        "filled": np.where(valid, view["filled"].cpu().numpy().astype(np.float32), np.nan),
         "std": view["std"].cpu().numpy(),
         "class": np.where(valid, cls.astype(np.float32), np.nan),
         "confidence": np.where(valid, view["confidence"].cpu().numpy(), np.nan),
@@ -96,9 +99,16 @@ def grid_map_msg(view, name, header):
     return m
 
 
-def xyzrgb_cloud(xyz, labels, header):
+DIM_RGB_FLOAT = (np.stack([(_PACKED_RGB.numpy() >> s) & 255 for s in (16, 8, 0)], 1) * 0.55).astype(np.uint32)
+DIM_RGB_FLOAT = ((DIM_RGB_FLOAT[:, 0] << 16) | (DIM_RGB_FLOAT[:, 1] << 8) | DIM_RGB_FLOAT[:, 2]).astype(np.uint32).view(np.float32)
+
+
+def xyzrgb_cloud(xyz, labels, header, dim=None):
+    """Points coloured by class; `dim` marks points drawn darker (hole-filled cells)."""
     a = xyz.float().cpu().numpy()
-    data = np.concatenate([a, CLASS_RGB_FLOAT[labels.cpu().numpy()][:, None]], 1).astype(np.float32)
+    lab = labels.cpu().numpy()
+    rgb = CLASS_RGB_FLOAT[lab] if dim is None else np.where(dim.cpu().numpy(), DIM_RGB_FLOAT[lab], CLASS_RGB_FLOAT[lab])
+    data = np.concatenate([a, rgb[:, None]], 1).astype(np.float32)
     m = PointCloud2(header=header, height=1, width=len(data), is_bigendian=False, is_dense=True,
                     point_step=16, row_step=16 * len(data))
     m.fields = [PointField(name=n, offset=4 * i, datatype=PointField.FLOAT32, count=1) for i, n in enumerate(("x", "y", "z", "rgb"))]
@@ -113,13 +123,16 @@ class AdaptMapNode(Node):
         self.declare_parameter("map_frame", "odom")
         self.declare_parameter("cloud_topic", "/lidar/points")
         self.declare_parameter("odom_topic", "/odom")
-        self.declare_parameter("viz_every", 3)
+        self.declare_parameter("viz_every", 3)          # snapshot (cells, cloud, nav grid) every N scans
+        self.declare_parameter("gridmap_every", 2)      # ...and the heavier per-zone GridMaps every N snapshots
         self.declare_parameter("stats_log", "")
         # sensor pose in base_link (the rover's fixed mast); avoids a TF listener, see on_odom
         self.declare_parameter("lidar_offset", [0.0, 0.0, 1.73])
         self.cfg = load_config(self.get_parameter("config").value)
         self.frame = self.get_parameter("map_frame").value
         self.viz_every = self.get_parameter("viz_every").value
+        self.gridmap_every = self.get_parameter("gridmap_every").value
+        self.snapshots = 0
         log = self.get_parameter("stats_log").value
         self.log = open(log, "w") if log else None
 
@@ -203,7 +216,7 @@ class AdaptMapNode(Node):
         Rt, tt = torch.from_numpy(R).to(self.dev), torch.from_numpy(t).to(self.dev)
         xyz = clean[:, :3] @ Rt.T + tt
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        self.map.integrate(xyz, probs, tt[:2], stamp)
+        self.map.integrate(xyz, probs, tt[:2], stamp, origin=tt)  # origin enables ray clearing
         sync(); tm["fuse"] = time.perf_counter() - t2
         tm["total"] = time.perf_counter() - t0
 
@@ -218,7 +231,7 @@ class AdaptMapNode(Node):
                "points": pstats, "occupied": {k: v["occupied"] for k, v in s["layers"].items()},
                "total_cells": s["total_cells"], "uniform_cells": s["uniform_cells"], "map_bytes": s["map_bytes"],
                "gpu_mem_mb": round(torch.cuda.max_memory_allocated() / 2**20, 1) if self.dev.startswith("cuda") else 0,
-               "publish_ms": self.pub_ms, "publish_dropped": self.pub_dropped}
+               "publish_ms": self.pub_ms, "publish_dropped": self.pub_dropped, "cleared": s["cleared"]}
         self.pub_stats.publish(String(data=json.dumps(rec)))
         if self.log:
             self.log.write(json.dumps(rec) + "\n")
@@ -231,7 +244,8 @@ class AdaptMapNode(Node):
         """Snapshot the map on the mapping thread (fresh tensors, cheap) and hand it to the publisher."""
         header = msg.header
         header.frame_id = self.frame
-        snap = (header, self.map.export(), self.map.nav_view(cell=0.2, half=50.0), xyz, labels)
+        export = self.map.export()
+        snap = (header, export, self.map.nav_view(cell=0.2, half=50.0, views=export), xyz, labels)
         try:
             self.pub_queue.put_nowait(snap)
         except queue.Full:
@@ -244,21 +258,23 @@ class AdaptMapNode(Node):
             except queue.Empty:
                 continue
             t = time.perf_counter()
+            self.snapshots += 1
             for name, view in export.items():
-                self.pub_grid[name].publish(grid_map_msg(view, name, header))
+                if self.snapshots % self.gridmap_every == 0:
+                    self.pub_grid[name].publish(grid_map_msg(view, name, header))
                 self.pub_cells[name].publish(self.cell_cloud(view, header))
             self.pub_cloud.publish(xyzrgb_cloud(xyz, labels, header))
             self.pub_nav.publish(self.nav_grid(nv, header))
             self.pub_ms = round((time.perf_counter() - t) * 1e3, 1)
 
     def cell_cloud(self, v, header):
-        """Observed cells of one zone as points (cell centre, elevation, class colour)."""
-        idx = v["valid"].nonzero()
+        """Known cells of one zone as points (cell centre, elevation, class colour; filled ones dimmed)."""
+        idx = v["known"].nonzero()
         r = v["resolution"]
         ox, oy = v["origin"]
         xyz = torch.stack([ox + (idx[:, 0].float() + 0.5) * r, oy + (idx[:, 1].float() + 0.5) * r,
                            v["elevation"][idx[:, 0], idx[:, 1]]], 1)
-        return xyzrgb_cloud(xyz, v["class"][idx[:, 0], idx[:, 1]], header)
+        return xyzrgb_cloud(xyz, v["class"][idx[:, 0], idx[:, 1]], header, dim=v["filled"][idx[:, 0], idx[:, 1]])
 
     def nav_grid(self, nv, header):
         cls, el = nv["class"], nv["elevation"]
