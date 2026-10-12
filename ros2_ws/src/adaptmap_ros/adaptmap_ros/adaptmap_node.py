@@ -13,6 +13,7 @@ Publishes
 """
 import array
 import json
+import queue
 import os
 import sys
 import time
@@ -110,6 +111,8 @@ class AdaptMapNode(Node):
         super().__init__("adaptmap")
         self.declare_parameter("config", str(ROOT / "configs" / "adaptmap.yaml"))
         self.declare_parameter("map_frame", "odom")
+        self.declare_parameter("cloud_topic", "/lidar/points")
+        self.declare_parameter("odom_topic", "/odom")
         self.declare_parameter("viz_every", 3)
         self.declare_parameter("stats_log", "")
         # sensor pose in base_link (the rover's fixed mast); avoids a TF listener, see on_odom
@@ -131,9 +134,9 @@ class AdaptMapNode(Node):
         self.poses = collections.deque(maxlen=200)
         self.pose_lock = threading.Lock()
         latest = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
-        self.create_subscription(Odometry, "/odom", self.on_odom, QoSProfile(depth=1),
+        self.create_subscription(Odometry, self.get_parameter("odom_topic").value, self.on_odom, QoSProfile(depth=1),
                                  callback_group=MutuallyExclusiveCallbackGroup())
-        self.sub = self.create_subscription(PointCloud2, "/lidar/points", self.on_cloud, latest,
+        self.sub = self.create_subscription(PointCloud2, self.get_parameter("cloud_topic").value, self.on_cloud, latest,
                                             callback_group=MutuallyExclusiveCallbackGroup())
         self.pub_grid = {z["name"]: self.create_publisher(GridMap, f"/adaptmap/grid/{z['name']}", 1) for z in self.cfg["zones"]}
         self.pub_cells = {z["name"]: self.create_publisher(PointCloud2, f"/adaptmap/cells/{z['name']}", 1) for z in self.cfg["zones"]}
@@ -142,6 +145,12 @@ class AdaptMapNode(Node):
         self.pub_stats = self.create_publisher(String, "/adaptmap/stats", 10)
         self.frames = 0
         self.busy = False
+        # Message building + publishing runs on its own thread so the mapping loop never waits on it.
+        # 1-deep queue: if the publisher is still busy, that snapshot is dropped (the map keeps updating).
+        self.pub_queue = queue.Queue(maxsize=1)
+        self.pub_dropped = 0
+        self.pub_ms = None
+        threading.Thread(target=self.publish_worker, daemon=True).start()
 
     def on_odom(self, msg):
         st = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
@@ -201,14 +210,15 @@ class AdaptMapNode(Node):
         self.frames += 1
         if self.frames % self.viz_every == 0:
             t3 = time.perf_counter()
-            self.publish(msg, xyz, labels)
-            tm["publish"] = time.perf_counter() - t3
+            self.queue_publish(msg, xyz, labels)
+            tm["snapshot"] = time.perf_counter() - t3
 
         s = self.map.stats()
         rec = {"stamp": stamp, "frame": self.frames, "timing_ms": {k: round(v * 1e3, 2) for k, v in tm.items()},
                "points": pstats, "occupied": {k: v["occupied"] for k, v in s["layers"].items()},
                "total_cells": s["total_cells"], "uniform_cells": s["uniform_cells"], "map_bytes": s["map_bytes"],
-               "gpu_mem_mb": round(torch.cuda.max_memory_allocated() / 2**20, 1) if self.dev.startswith("cuda") else 0}
+               "gpu_mem_mb": round(torch.cuda.max_memory_allocated() / 2**20, 1) if self.dev.startswith("cuda") else 0,
+               "publish_ms": self.pub_ms, "publish_dropped": self.pub_dropped}
         self.pub_stats.publish(String(data=json.dumps(rec)))
         if self.log:
             self.log.write(json.dumps(rec) + "\n")
@@ -217,15 +227,29 @@ class AdaptMapNode(Node):
             self.get_logger().info(f"frame {self.frames}: {rec['timing_ms']} ms, pts {pstats['out']}")
 
     # ---------------------------------------------------------------- publishing
-    def publish(self, msg, xyz, labels):
+    def queue_publish(self, msg, xyz, labels):
+        """Snapshot the map on the mapping thread (fresh tensors, cheap) and hand it to the publisher."""
         header = msg.header
         header.frame_id = self.frame
-        export = self.map.export()
-        for name, view in export.items():
-            self.pub_grid[name].publish(grid_map_msg(view, name, header))
-            self.pub_cells[name].publish(self.cell_cloud(view, header))
-        self.pub_cloud.publish(xyzrgb_cloud(xyz, labels, header))
-        self.pub_nav.publish(self.nav_grid(header))
+        snap = (header, self.map.export(), self.map.nav_view(cell=0.2, half=50.0), xyz, labels)
+        try:
+            self.pub_queue.put_nowait(snap)
+        except queue.Full:
+            self.pub_dropped += 1
+
+    def publish_worker(self):
+        while rclpy.ok():
+            try:
+                header, export, nv, xyz, labels = self.pub_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            t = time.perf_counter()
+            for name, view in export.items():
+                self.pub_grid[name].publish(grid_map_msg(view, name, header))
+                self.pub_cells[name].publish(self.cell_cloud(view, header))
+            self.pub_cloud.publish(xyzrgb_cloud(xyz, labels, header))
+            self.pub_nav.publish(self.nav_grid(nv, header))
+            self.pub_ms = round((time.perf_counter() - t) * 1e3, 1)
 
     def cell_cloud(self, v, header):
         """Observed cells of one zone as points (cell centre, elevation, class colour)."""
@@ -236,8 +260,7 @@ class AdaptMapNode(Node):
                            v["elevation"][idx[:, 0], idx[:, 1]]], 1)
         return xyzrgb_cloud(xyz, v["class"][idx[:, 0], idx[:, 1]], header)
 
-    def nav_grid(self, header, cell=0.2, half=50.0):
-        nv = self.map.nav_view(cell=cell, half=half)
+    def nav_grid(self, nv, header):
         cls, el = nv["class"], nv["elevation"]
         known = torch.isfinite(el)
         ground = classes.GROUND.to(cls.device)[cls]
@@ -246,7 +269,7 @@ class AdaptMapNode(Node):
         occ[known & ~ground & (cls != 0)] = 100
         g = OccupancyGrid(header=header)
         n = cls.shape[0]
-        g.info.resolution = cell
+        g.info.resolution = nv["resolution"]
         g.info.width = g.info.height = n
         g.info.origin.position.x, g.info.origin.position.y = nv["origin"]
         g.info.origin.orientation.w = 1.0

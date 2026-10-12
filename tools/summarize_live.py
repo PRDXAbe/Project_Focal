@@ -20,18 +20,22 @@ def main():
     for k, name in (("preprocess", "Preprocess"), ("segment", "Segmentation"), ("fuse", "Foveated fusion"), ("total", "**Pipeline total**")):
         v = [x["timing_ms"][k] for x in r]
         rows.append(f"| {name} | {st.mean(v):.1f} | {pct(v):.1f} |")
-    pub = [x["timing_ms"]["publish"] for x in r if "publish" in x["timing_ms"]]
+    # publishing runs on its own thread since P1 (publish_ms); older logs timed it inline
+    pub = [x["publish_ms"] for x in r if x.get("publish_ms")] or \
+          [x["timing_ms"]["publish"] for x in r if "publish" in x["timing_ms"]]
+    dropped = r[-1].get("publish_dropped", 0)
     occ = [sum(x["occupied"].values()) for x in r]
     md = [HEAD.strip(), "",
           f"Scripted lap through the Gazebo world (`tools/capture_demo.sh`): Gazebo, RViz, the video renderer and "
           f"AdaptMap all on one RTX 4050 laptop. {len(r)} scans processed over {span:.0f} s of sim time "
           f"(**{len(r)/span:.1f} scans/s**; the node always takes the newest scan, LiDAR runs at ~8.5 Hz).", "",
           "| Stage | Mean (ms) | p95 (ms) |", "|---|---|---|", *rows,
-          f"| ROS publishing (every 3rd scan) | {st.mean(pub):.1f} | {pct(pub):.1f} |", "",
+          f"| ROS publishing (every 3rd scan, own thread) | {st.mean(pub):.1f} | {pct(pub):.1f} |", "",
+          f"Visualisation snapshots dropped because the publisher was busy: {dropped} (mapping never waits on it).", "",
           f"Peak GPU memory {max(x['gpu_mem_mb'] for x in r):.0f} MB. Points per scan after preprocessing "
           f"{st.mean(x['points']['out'] for x in r):,.0f}. Observed map cells at end of lap {occ[-1]:,} "
           f"(of {r[-1]['total_cells']:,} foveated cells; a uniform 5 cm map would hold {r[-1]['uniform_cells']:,}).", "",
-          "Segmentation is slower live than offline (75 ms) because the GPU is shared with Gazebo's LiDAR "
+          "Segmentation is slower live than offline (see the Latency table) because the GPU is shared with Gazebo's LiDAR "
           "rendering and the GUIs.", "",
           "Demo video: [figures/demo.mp4](figures/demo.mp4) — left: semantic classes per zone, right: elevation.", "",
           "![live](figures/demo_frame.png)", ""]
