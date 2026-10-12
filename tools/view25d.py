@@ -185,6 +185,16 @@ def raw_cloud(raw):
     return pc
 
 
+def live_zones(zones, stats):
+    """Zones with the radii the node is currently using (speed-adaptive), from /adaptmap/stats."""
+    import json
+    try:
+        halves = json.loads(stats)["zone_halves"]
+        return [dict(z, half_extent=h) for z, h in zip(zones, halves)]
+    except (TypeError, ValueError, KeyError):
+        return zones
+
+
 def zone_outlines(zones, center):
     """Ground-level squares marking where each tile size starts/ends (map is centred on the robot)."""
     pts, lines, cols = [], [], []
@@ -355,7 +365,7 @@ class Viewer:
             if self.show in ("raw", "both"):
                 geo["raw"] = (raw_cloud(raw), self.mat_pts)
             if self.outlines:
-                geo["zones"] = (zone_outlines(self.zones, pose[0]), self.mat_line)
+                geo["zones"] = (zone_outlines(live_zones(self.zones, stats), pose[0]), self.mat_line)
             n_cells = sum(len(c[0]) for c in cells.values())
             n_raw = 0 if raw is None else len(raw)
             self.pending = True
@@ -370,7 +380,7 @@ class Viewer:
             self.scene.remove_3d_label(lab)
         self.labels = []
         if self.outlines:
-            for pos, text in zone_label_positions(self.zones, pose[0]):
+            for pos, text in zone_label_positions(live_zones(self.zones, self.feed.stats), pose[0]):
                 self.labels.append(self.scene.add_3d_label(pos, text))
         if self.first or self.follow:
             look, eye, up = camera(pose, self.view)

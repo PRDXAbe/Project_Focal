@@ -40,6 +40,15 @@ fusion:
   clear_min_hits: 1
   clear_factor: 0.5       # weight multiplier per scan for contradicted cells
 
+# Speed-adaptive foveation (adaptmap/adaptive.py): the 5 cm zone grows with reaction + braking distance
+adaptive_zones:
+  enabled: true
+  reaction_time: 1.0      # s
+  decel: 2.0              # comfortable braking, m/s^2
+  margin: 4.0             # m
+  max_near: 25.0          # m (must stay inside the next zone)
+  shrink_delay: 3.0       # s the target must stay smaller before the zone shrinks
+
 # Terrain analysis / traversability (adaptmap/terrain.py), limits of the rover
 terrain:
   costmap_cell: 0.2       # navigation grid resolution (m)

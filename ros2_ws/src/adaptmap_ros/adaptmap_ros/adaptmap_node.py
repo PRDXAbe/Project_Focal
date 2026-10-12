@@ -38,6 +38,7 @@ import threading
 ROOT = Path(os.environ.get("ADAPTMAP_ROOT", Path(__file__).resolve().parents[4]))
 sys.path.insert(0, str(ROOT))
 from adaptmap import classes, terrain  # noqa: E402
+from adaptmap.adaptive import ZonePolicy  # noqa: E402
 from adaptmap.config import load_config  # noqa: E402
 from adaptmap.foveated_map import FoveatedMap  # noqa: E402
 from adaptmap.preprocess import preprocess  # noqa: E402
@@ -163,6 +164,9 @@ class AdaptMapNode(Node):
         self.dev = self.cfg["device"]
         self.seg = build_segmenter(self.cfg)
         self.map = FoveatedMap(self.cfg["zones"], self.cfg["fusion"], device=self.dev)
+        ac = self.cfg.get("adaptive_zones", {})
+        self.policy = ZonePolicy(self.cfg["zones"], ac, self.map.snap) if ac.get("enabled") else None
+        self.speed = 0.0
         self.get_logger().info(f"AdaptMap ready: {self.map.stats()['total_cells']} cells, model={self.cfg['model']['backend']}")
 
         # Robot pose from /odom (depth 1, own thread) into a short history; the Python TF listener
@@ -193,6 +197,7 @@ class AdaptMapNode(Node):
     def on_odom(self, msg):
         st = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         p = msg.pose.pose.position
+        self.speed = msg.twist.twist.linear.x
         with self.pose_lock:
             self.poses.append((st, quat_to_rot(msg.pose.pose.orientation), np.array([p.x, p.y, p.z], np.float32)))
 
@@ -241,6 +246,11 @@ class AdaptMapNode(Node):
         Rt, tt = torch.from_numpy(R).to(self.dev), torch.from_numpy(t).to(self.dev)
         xyz = clean[:, :3] @ Rt.T + tt
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        if self.policy is not None:
+            zones = self.policy.update(self.speed, stamp)
+            if zones is not None:
+                self.map.set_zones(zones)
+                self.get_logger().info(f"speed {self.speed:.1f} m/s -> 5 cm zone radius {zones[0]['half_extent']:.1f} m")
         self.map.integrate(xyz, probs, tt[:2], stamp, origin=tt)  # origin enables ray clearing
         sync(); tm["fuse"] = time.perf_counter() - t2
         tm["total"] = time.perf_counter() - t0
@@ -256,7 +266,8 @@ class AdaptMapNode(Node):
                "points": pstats, "occupied": {k: v["occupied"] for k, v in s["layers"].items()},
                "total_cells": s["total_cells"], "uniform_cells": s["uniform_cells"], "map_bytes": s["map_bytes"],
                "gpu_mem_mb": round(torch.cuda.max_memory_allocated() / 2**20, 1) if self.dev.startswith("cuda") else 0,
-               "publish_ms": self.pub_ms, "publish_dropped": self.pub_dropped, "cleared": s["cleared"]}
+               "publish_ms": self.pub_ms, "publish_dropped": self.pub_dropped, "cleared": s["cleared"],
+               "zone_halves": [z["half_extent"] for z in self.map.zones], "speed": round(self.speed, 2)}
         self.pub_stats.publish(String(data=json.dumps(rec)))
         if self.log:
             self.log.write(json.dumps(rec) + "\n")

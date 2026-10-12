@@ -44,6 +44,9 @@ def run(args, cfg):
     uni = None if args.no_uniform else FoveatedMap(
         [{"name": "uniform", "half_extent": cfg["zones"][-1]["half_extent"], "cell": cfg["zones"][0]["cell"]}],
         cfg["fusion"], snap=max(z["cell"] for z in cfg["zones"]))
+    from adaptmap.adaptive import ZonePolicy
+    ac = cfg.get("adaptive_zones", {})
+    policy = ZonePolicy(cfg["zones"], ac, fov.snap) if ac.get("enabled") else None
     conf = torch.zeros(classes.NUM_CLASSES, classes.NUM_CLASSES, dtype=torch.long, device="cuda")
     rec = []
     torch.cuda.reset_peak_memory_stats()
@@ -57,6 +60,8 @@ def run(args, cfg):
         lab, prob = seg.segment(clean)
         sync(); t2 = time.perf_counter()
         xyz = clean[:, :3] + torch.tensor([x, y, SENSOR_H], device="cuda")
+        if policy is not None and (z := policy.update(args.speed, t)) is not None:
+            fov.set_zones(z)
         fov.integrate(xyz, prob, [x, y], t, origin=[x, y, SENSOR_H])
         sync(); t3 = time.perf_counter()
         tu = 0.0
@@ -69,7 +74,8 @@ def run(args, cfg):
         gtc = label_clean(raw, gt, clean)
         conf += torch.bincount(gtc * classes.NUM_CLASSES + lab, minlength=classes.NUM_CLASSES ** 2).view(
             classes.NUM_CLASSES, classes.NUM_CLASSES)
-        rec.append({"pre": t1 - t0, "seg": t2 - t1, "fuse": t3 - t2, "uni_fuse": tu, "pts": ps["out"], "raw": ps["raw"]})
+        rec.append({"pre": t1 - t0, "seg": t2 - t1, "fuse": t3 - t2, "uni_fuse": tu, "pts": ps["out"], "raw": ps["raw"],
+                    "near": fov.zones[0]["half_extent"], "cells": fov.stats()["total_cells"]})
         if f % 50 == 0:
             print(f"frame {f}: seg {1e3*(t2-t1):.0f} ms fuse {1e3*(t3-t2):.1f} ms uniform {1e3*tu:.1f} ms")
     return fov, uni, conf, rec
@@ -221,7 +227,8 @@ def main():
     peak = torch.cuda.max_memory_allocated() / 2**20
 
     if a.no_write:
-        print(json.dumps({"latency_ms": {k: round(v, 1) for k, v in lat.items()}, "pts_in": round(float(np.mean([r['pts'] for r in rec]))),
+        print(json.dumps({"speed": a.speed, "near_radius_m": rec[-1]["near"], "cells": rec[-1]["cells"],
+                          "latency_ms": {k: round(v, 1) for k, v in lat.items()}, "pts_in": round(float(np.mean([r['pts'] for r in rec]))),
                           "miou": round(100 * miou, 1), "acc": round(100 * acc, 1),
                           "iou": {classes.NAMES[i]: round(100 * float(ious[i]), 1) for i in range(1, classes.NUM_CLASSES) if not np.isnan(ious[i])}}))
         return

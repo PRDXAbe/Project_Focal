@@ -128,21 +128,84 @@ class FoveatedMap:
         self.device = torch.device(device)
         self.fusion = fusion
         self.C = classes.NUM_CLASSES
-        cells = [z["cell"] for z in zones]
-        self.snap = snap or max(cells)
-        for c in cells:
-            assert abs(self.snap / c - round(self.snap / c)) < 1e-6, "snap must be a multiple of every cell"
-        self.layers, inner = [], 0.0
-        for z in zones:
-            self.layers.append(Layer(z["name"], z["half_extent"], z["cell"], inner, self.C, self.device,
-                                     z.get("fill_radius", 0.0)))
-            inner = z["half_extent"]
-        self.halves = torch.tensor([l.half for l in self.layers], device=self.device)
+        self.snap = snap or max(z["cell"] for z in zones)
+        self.layers = self._build_layers(zones)
         self.center_idx = None  # integer snap-cell coords of the map centre
         self.stamp = None
         self._dyn = classes.DYNAMIC.to(self.device)
         self._ground_cls = classes.GROUND.to(self.device)
         self.cleared = 0  # cells reset by ray clearing in the last scan
+
+    def _build_layers(self, zones):
+        for z in zones:
+            assert abs(self.snap / z["cell"] - round(self.snap / z["cell"])) < 1e-6, "snap must be a multiple of every cell"
+            assert abs(z["half_extent"] / self.snap - round(z["half_extent"] / self.snap)) < 1e-6, \
+                "zone radii must be multiples of snap so layers stay aligned"
+        layers, inner = [], 0.0
+        for z in zones:
+            layers.append(Layer(z["name"], z["half_extent"], z["cell"], inner, self.C, self.device, z.get("fill_radius", 0.0)))
+            inner = z["half_extent"]
+        self.zones = [dict(z) for z in zones]
+        self.halves = torch.tensor([l.half for l in layers], device=self.device)
+        return layers
+
+    def set_zones(self, zones):
+        """Change zone radii at runtime (speed-adaptive foveation) and keep what the map knows.
+
+        Each new cell is resampled from the old layer that covered its area: when tiles get coarser
+        the tallest old tile wins (thin obstacles survive); when they get finer each new tile copies
+        the old tile it lies in.
+        """
+        old, old_halves = self.layers, self.halves
+        self.layers = self._build_layers(zones)
+        if self.center_idx is None:
+            return
+        cxy = self.center_xy
+
+        def old_zone(xy):
+            d = (xy - cxy).abs().max(dim=1).values
+            z = torch.bucketize(d, old_halves, right=True)
+            z[z >= len(old)] = -1
+            return z
+
+        fields = list(_FIELDS)
+        for ln in self.layers:
+            for oi, lo in enumerate(old):
+                if lo.cell <= ln.cell + 1e-9:
+                    # old tiles same size or finer: push each valid old tile into the new tile it falls in
+                    idx = ((lo.weight > 0) & lo.ring).view(-1).nonzero().squeeze(1)
+                    if idx.numel() == 0:
+                        continue
+                    ij = torch.stack([idx // lo.n, idx % lo.n], 1).float()
+                    xy = cxy - lo.half + (ij + 0.5) * lo.cell
+                    keep = self.zone_of(xy) == self.layers.index(ln)
+                    if not keep.any():
+                        continue
+                    idx, xy = idx[keep], xy[keep]
+                    t = self._cell_index(ln, xy)
+                    z = lo.zmax.view(-1)[idx]
+                    top = torch.full((ln.n * ln.n,), float("-inf"), device=self.device).scatter_reduce_(0, t, z, "amax")
+                    win = z >= top[t]                       # the tallest old tile per new tile
+                    src, dst = idx[win], t[win]
+                    for f in fields:
+                        getattr(ln, f).view(-1)[dst] = getattr(lo, f).view(-1)[src]
+                    ln.probs.view(self.C, -1)[:, dst] = lo.probs.view(self.C, -1)[:, src]
+                else:
+                    # old tiles coarser: every new tile copies the old tile it lies in
+                    ij = torch.stack(torch.meshgrid(torch.arange(ln.n, device=self.device),
+                                                    torch.arange(ln.n, device=self.device), indexing="ij"), -1).view(-1, 2)
+                    ring = ln.ring.view(-1)
+                    xy = cxy - ln.half + (ij.float() + 0.5) * ln.cell
+                    sel = ring & (old_zone(xy) == oi)
+                    if not sel.any():
+                        continue
+                    dst = sel.nonzero().squeeze(1)
+                    src = self._cell_index(lo, xy[sel])
+                    ok = lo.weight.view(-1)[src] > 0
+                    dst, src = dst[ok], src[ok]
+                    for f in fields:
+                        getattr(ln, f).view(-1)[dst] = getattr(lo, f).view(-1)[src]
+                    ln.probs.view(self.C, -1)[:, dst] = lo.probs.view(self.C, -1)[:, src]
 
     # ------------------------------------------------------------------ geometry
     @property
