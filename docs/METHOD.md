@@ -27,12 +27,14 @@ fail at opposite ends:
 3D LiDAR scan (x, y, z, intensity, t)
    │
    ├─ 1. Preprocessing        invalid/NaN removal, range gate 0.5–100 m, ROI height window,
-   │                          self-body removal, voxel-isolation outlier filter            (~1.6 ms)
-   ├─ 2. Semantic segmentation sparse 3D CNN (MinkUNet-34) → per-point class probabilities (~70 ms)
-   ├─ 3. Distance zoning      Chebyshev distance from map centre → zone index per point
-   ├─ 4. Foveated fusion      per-zone grid binning + decayed running fusion on GPU         (~3.7 ms)
-   └─ 5. Outputs              per-zone 2.5D layers (elevation, ground, roughness, class,
-                              confidence) + fused nav grid for path planning
+   │                          self-body removal, voxel-isolation outlier filter            (~2 ms)
+   ├─ 2. Semantic segmentation sparse 3D CNN (MinkUNet-34, fp16) → per-point class probs  (~28 ms)
+   ├─ 3. Distance zoning      Chebyshev distance from map centre → zone index per point;
+   │                          zone radii adapt to vehicle speed (§3.8)
+   ├─ 4. Foveated fusion      per-zone grid binning, decayed running fusion, ray clearing  (~7 ms)
+   ├─ 5. Views                ground surface, height above ground, clearance, ring-gap filling
+   ├─ 6. Terrain analysis     slope, step, roughness, curbs → traversability cost (§3.7)
+   └─ 7. Outputs              per-zone 2.5D layers + a Nav2 costmap for path planning
 ```
 
 Everything after the sensor runs inside one process on the GPU, so point clouds are never
@@ -88,11 +90,13 @@ re-tuned for other sensors, speeds or vehicles.
 
 For every cell the map keeps a **decayed running average of per-scan observations**:
 
-- `z_min` — ground / lowest surface height
+- `z_min` — lowest point height
 - `z_max` — **elevation** (top surface; obstacle height)
 - `z_mean`, `E[z²]` → height standard deviation (roughness / vertical structure)
 - `p[C]` — fused class-probability vector (10 AdaptMap classes, fp16)
 - `w` — observation weight (support), `t_last` — last update time
+- `ground`, `w_g` — mean height of the cell's *ground-class* points, with its own weight
+- `omin`, `w_o` — lowest *non-ground* point (bottom of whatever stands or hangs there), with its own weight
 
 The outputs derived from these are: top class = argmax *p*, and
 **confidence = max(p) · min(1, w / w_conf)**, which combines how sure the classifier is with
@@ -119,8 +123,36 @@ For each scan with timestamp *t*:
    *x ← a·x + (1 − a)·x_scan* for every stored statistic, *w ← min(w + 1, w_max)*.
    Capping the weight (w_max = 10) keeps the map responsive to change.
 
+6. **Ray clearing (free-space evidence).** A subsample of the scan's rays (every 8th point,
+   32 samples per ray, rays up to 50 m) is walked through the grid. A sample that lies *inside* a
+   cell's stored obstacle span, more than 0.2 m above its bottom `omin` and more than 0.2 m below
+   its top `z_max`, proves that space is now empty. This only counts in cells that received no
+   points this scan, and never in the last 0.3 m before the ray's own end point. Each such cell's
+   weight and obstacle weight are halved per scan; when the obstacle weight falls below *w_min*
+   the cell is reset. Rays passing *over* an object or *under* an overhang (a tree crown) clear
+   nothing.
+
 Counting every scan as one observation, however many points it contributes, stops dense
-near-range cells from becoming "sticky" compared with sparse far ones.
+near-range cells from becoming "sticky" compared with sparse far ones. Class-aware decay and ray
+clearing are complementary: decay forgets what is no longer seen; clearing removes what is
+seen to be gone.
+
+### 3.4b Views: ground surface, clearance, hole filling
+
+Views are computed from the stored statistics when published:
+
+- **Ground surface.** Each cell's own ground height where it has ground points; otherwise the
+  mean of ground cells within 2 m (integral-image box sums, any window size at the same cost).
+  So a car's cells get the ground height of the road around it.
+- **Height above ground** = `z_max` − ground. **Clearance** = `omin` − ground: the free height
+  under a tree crown or overhang. This lets a 2.5D map say "drivable underneath", which a single
+  height per cell normally can't.
+- **Ring-gap filling.** Beyond ~10 m a LiDAR's rings hit the ground far apart: about 0.4 m at
+  10 m, 1.6 m at 20 m, 3.6 m at 30 m. An unknown cell is filled with interpolated ground height and
+  the majority ground class only when ground cells exist on **both opposite sides** of it within
+  the zone's fill radius (0.3 / 1 / 2 / 3 m). The sides are taken as narrow bands in line with
+  the cell, so this interpolates between rings but never extrapolates into shadows behind walls.
+  Filled cells are flagged and get half confidence.
 
 ### 3.5 Optional compute-side foveation
 
@@ -135,9 +167,39 @@ asks for. Wherever the output cell is coarser than the source layer, it is fille
 **tallest** source cell, so thin obstacles (poles, pedestrians) are never averaged away. The
 ROS node publishes:
 
-- this grid as an occupancy grid (ground classes → free, other known classes → occupied,
-  unobserved → unknown)
-- each zone as a `grid_map` with elevation / ground / std / class / confidence / colour layers.
+- this grid, analysed for terrain (§3.7), as a Nav2 costmap (`nav_msgs/OccupancyGrid`);
+- each zone as a `grid_map` with elevation, ground, height-above-ground, clearance, filled, std,
+  class, confidence and colour layers, plus a terrain `grid_map`.
+
+### 3.7 Terrain analysis and traversability
+
+On the navigation grid (0.2 m, ±50 m):
+
+- **slope** = gradient of the smoothed ground surface;
+- **step** = largest height jump of the *drivable surface* to a neighbouring cell (the drivable
+  surface is the ground under passable overhangs and the top surface elsewhere);
+- **roughness** = local standard deviation of the drivable surface;
+- **curb** = a 5–30 cm step where road and sidewalk cells meet.
+
+The cost (0 free … 99, 100 lethal, −1 unknown) is a class prior (road 0, terrain 20, sidewalk 30,
+vegetation 60), plus slope and roughness terms and a penalty for filled cells. It is made lethal
+for: anything standing higher than the robot can climb (unless the clearance is higher than the
+robot), slopes over the limit, unclimbable steps and curbs. All limits are robot parameters, so
+the same map serves a rover (12 cm step, 1 m height) or a car.
+
+### 3.8 Speed-adaptive foveation
+
+The finest zone's radius follows the distance the vehicle needs to react and stop:
+*R₀ = clamp(v·t_react + v²/(2a) + margin, R_base, R_max)*, on the 0.5 m snap grid. It grows
+immediately when the speed rises and shrinks only after the target has stayed smaller for 3 s
+(hysteresis). Resizing **resamples** the map instead of clearing it:
+
+- where tiles become coarser, each new tile takes all its values from the *tallest* old tile it
+  covers, so thin obstacles survive;
+- where tiles become finer, each new tile copies the old tile it lies in.
+
+At walking or rover speeds the 10 m base already covers the stopping envelope. At 8 m/s
+(29 km/h) the 5 cm zone grows to 25 m: 1.33 M cells, still 12× fewer than a uniform 5 cm map.
 
 ## 4. Semantic segmentation
 

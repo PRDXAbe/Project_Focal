@@ -46,6 +46,32 @@ def label_points(xyz_world, t, margin=0.05, manifest=None):
         better = vmin < best
         best[better] = vmin[better]
         out[better] = ll[bi[better]]
+    return _ground_contact_fix(xyz_world, out, c, h, yaw, lab)
+
+
+def _ground_contact_fix(xyz, out, c, h, yaw, lab, lift=0.08):
+    """Object boxes reach down to the ground, so the road/sidewalk visible around a pedestrian's feet
+    or under a car's edge would be labelled as the object. Points less than `lift` above the top of
+    the ground box (road / sidewalk / terrain) under them get that ground class instead."""
+    gcls = classes.GROUND.to(lab.device)[lab]
+    obj = ~classes.GROUND.to(out.device)[out] & (out > 0)
+    if not obj.any() or not gcls.any():
+        return out
+    p = xyz[obj]
+    gi = gcls.nonzero().squeeze(1)
+    d = p[None, :, :2] - c[gi, None, :2]
+    cy, sy = yaw[gi].cos()[:, None], yaw[gi].sin()[:, None]
+    lx, ly = cy * d[..., 0] + sy * d[..., 1], -sy * d[..., 0] + cy * d[..., 1]
+    under = (lx.abs() <= h[gi, None, 0]) & (ly.abs() <= h[gi, None, 1])
+    top = torch.where(under, (c[gi, 2] + h[gi, 2])[:, None], torch.full_like(lx, float("-inf")))
+    support, which = top.max(0)
+    has = torch.isfinite(support)
+    support = torch.where(has, support, torch.zeros_like(support))
+    ground_lab = torch.where(has, lab[gi][which], torch.full_like(which, classes.NAMES.index("terrain")))
+    low = p[:, 2] < support + lift
+    o = out[obj]
+    o[low] = ground_lab[low]
+    out[obj] = o
     return out
 
 
