@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 import open3d as o3d
 import rclpy
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import OccupancyGrid, Odometry
 from PIL import Image, ImageDraw, ImageFont
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
@@ -46,6 +46,19 @@ BG = (0.07, 0.07, 0.09)
 RAW_RGB = np.array([0.85, 0.85, 0.85])
 # one colour per zone, finest first (categorical slots: blue, aqua, yellow, orange)
 ZONE_RGB = np.array([[42, 120, 214], [27, 175, 122], [237, 161, 0], [235, 104, 52]]) / 255.0
+# traversability: one-hue sequential ramp (pale = free, dark orange = costly) + a distinct lethal colour
+COST_LO, COST_HI = np.array([253, 232, 214]) / 255.0, np.array([194, 65, 12]) / 255.0
+LETHAL_RGB = np.array([120, 20, 30]) / 255.0
+UNKNOWN_RGB = np.array([90, 90, 96]) / 255.0
+
+
+def cost_rgb(cost):
+    """OccupancyGrid costs (-1 unknown, 0..99, 100 lethal) -> RGB."""
+    t = np.clip(cost, 0, 99)[:, None] / 99.0
+    rgb = COST_LO + (COST_HI - COST_LO) * t
+    rgb[cost >= 100] = LETHAL_RGB
+    rgb[cost < 0] = UNKNOWN_RGB
+    return rgb
 FONT = "DejaVuSans.ttf"
 
 
@@ -70,6 +83,13 @@ class Feed(Node):
         self.create_subscription(PointCloud2, "/lidar/points", self.on_raw, latest)
         self.create_subscription(Odometry, "/odom", self.on_odom, latest)
         self.create_subscription(String, "/adaptmap/stats", lambda m: setattr(self, "stats", m.data), 1)
+        self.cost = None  # (grid [ix, iy], origin xy, resolution) from /adaptmap/costmap
+        self.create_subscription(OccupancyGrid, "/adaptmap/costmap", self.on_cost, 1)
+
+    def on_cost(self, m):
+        a = np.frombuffer(bytes(m.data), np.int8).reshape(m.info.height, m.info.width).T  # -> [ix, iy]
+        with self.lock:
+            self.cost = (a.copy(), (m.info.origin.position.x, m.info.origin.position.y), m.info.resolution)
 
     def on_odom(self, m):
         p, q = m.pose.pose.position, m.pose.pose.orientation
@@ -99,10 +119,23 @@ class Feed(Node):
 
 
 # ---------------------------------------------------------------- geometry
-def columns_mesh(cells, color_by="class", gap=None):
+def cell_costs(xyz, cost):
+    """Look up the costmap value under each cell centre (-1 where the costmap has no data)."""
+    if cost is None:
+        return np.full(len(xyz), -1, np.int8)
+    grid, (ox, oy), res = cost
+    i = ((xyz[:, 0] - ox) / res).astype(int)
+    j = ((xyz[:, 1] - oy) / res).astype(int)
+    ok = (i >= 0) & (i < grid.shape[0]) & (j >= 0) & (j < grid.shape[1])
+    out = np.full(len(xyz), -1, np.int8)
+    out[ok] = grid[i[ok], j[ok]]
+    return out
+
+
+def columns_mesh(cells, color_by="class", gap=None, cost=None):
     """One flat-shaded column per cell: top face always, side faces only for raised cells.
 
-    color_by: "class" (object type) or "zone" (tile size). gap: fraction of the tile left empty
+    color_by: "class" (object type), "zone" (tile size) or "cost" (traversability). gap: fraction of the tile left empty
     around each tile so the grid itself is visible (defaults: 4% for class, 22% for zone colouring).
     """
     if gap is None:
@@ -114,6 +147,8 @@ def columns_mesh(cells, color_by="class", gap=None):
             continue
         if color_by == "zone":
             col = np.broadcast_to(ZONE_RGB[zi], col.shape)
+        elif color_by == "cost":
+            col = cost_rgb(cell_costs(xyz, cost))
         h = size * (1 - gap) / 2
         top = np.maximum(xyz[:, 2], 0.02)
         x0, x1, y0, y1 = xyz[:, 0] - h, xyz[:, 0] + h, xyz[:, 1] - h, xyz[:, 1] + h
@@ -203,6 +238,7 @@ def legend_image(color_by, zones, width=300):
     f_h, f = font(17, True), font(15)
     rows = [("h", "Object types (colour)")] + [("c", i) for i in range(1, classes.NUM_CLASSES)] + \
            [("s", None), ("h", "Tile size (zones)")] + [("z", i) for i in range(len(zones))] + \
+           [("s", None), ("h", "Traversability (cost)")] + [("k", v) for v in (0, 50, 99, 100)] + \
            [("s", None), ("t", "Tiles are small near the robot and"), ("t", "grow with distance. Switch colour to"),
             ("t", "'tile size' + top view to see zones.")]
     img = Image.new("RGB", (width, 26 * len(rows) + 16), (24, 24, 28))
@@ -215,6 +251,12 @@ def legend_image(color_by, zones, width=300):
             col = tuple(int(c) for c in classes.COLORS[v])
             d.rectangle([14, y + 3, 34, y + 19], fill=col, outline=(200, 200, 200))
             d.text((44, y + 1), classes.NAMES[v].replace("_", " / "), fill=(230, 230, 230), font=f)
+        elif kind == "k":
+            col = tuple(int(c * 255) for c in cost_rgb(np.array([v]))[0])
+            label = {0: "free (e.g. road)", 50: "costly (grass, slope, rough)", 99: "very costly",
+                     100: "blocked (obstacle, curb, steep)"}[v]
+            d.rectangle([14, y + 3, 34, y + 19], fill=col, outline=(200, 200, 200))
+            d.text((44, y + 1), label, fill=(230, 230, 230), font=f)
         elif kind == "z":
             z = zones[v]
             prev = 0 if v == 0 else zones[v - 1]["half_extent"]
@@ -260,8 +302,8 @@ class Viewer:
         p.add_fixed(0.5 * em)
         p.add_child(gui.Label("Colour tiles by"))
         colr = gui.RadioButton(gui.RadioButton.VERT)
-        colr.set_items(["Object type", "Tile size (shows the zones)"])
-        colr.set_on_selection_changed(lambda i: self.set(color_by=["class", "zone"][i]))
+        colr.set_items(["Object type", "Tile size (shows the zones)", "Traversability (robot's cost)"])
+        colr.set_on_selection_changed(lambda i: self.set(color_by=["class", "zone", "cost"][i]))
         p.add_child(colr)
         p.add_fixed(0.5 * em)
         p.add_child(gui.Label("Camera"))
@@ -309,7 +351,7 @@ class Viewer:
             self.last_v = ver
             geo = {"robot": (robot_marker(pose), self.mat_robot)}
             if self.show in ("map", "both"):
-                geo["map"] = (columns_mesh(cells, self.color_by), self.mat_mesh)
+                geo["map"] = (columns_mesh(cells, self.color_by, cost=self.feed.cost), self.mat_mesh)
             if self.show in ("raw", "both"):
                 geo["raw"] = (raw_cloud(raw), self.mat_pts)
             if self.outlines:
@@ -367,6 +409,7 @@ class Recorder:
 
     def __init__(self, zones, color_by, view):
         self.zones, self.color_by, self.view = zones, color_by, view
+        self.cost = None
         self.r = R.OffscreenRenderer(self.W, self.H)
         self.r.scene.set_background([*BG, 1.0])
         self.unlit = R.MaterialRecord(); self.unlit.shader = "defaultUnlit"
@@ -389,7 +432,7 @@ class Recorder:
         zl = zone_outlines(self.zones, pose[0])
         n_raw = 0 if raw is None else len(raw)
         left = self.view_img([("raw", raw_cloud(raw), self.pts), ("z", zl, self.line), ("robot", robot, self.unlit)], pose)
-        right = self.view_img([("map", columns_mesh(cells, self.color_by), self.unlit), ("z", zl, self.line),
+        right = self.view_img([("map", columns_mesh(cells, self.color_by, cost=self.cost), self.unlit), ("z", zl, self.line),
                                ("robot", robot, self.unlit)], pose)
         n_cells = sum(len(c[0]) for c in cells.values())
         lw = self.legend.width
@@ -421,6 +464,7 @@ def record(feed, zones, out, seconds, speed, color_by, view):
                 time.sleep(0.05)
                 continue
             last_v = ver
+            rec.cost = feed.cost
             rec.frame(cells, raw, pose).save(frames / f"{n:05d}.png")
             n += 1
     except KeyboardInterrupt:
@@ -441,7 +485,8 @@ def main():
     ap.add_argument("--video", help="record a side-by-side explainer video instead of opening a window")
     ap.add_argument("--seconds", type=float, default=0)
     ap.add_argument("--speed", type=float, default=1.0, help="video playback speed vs real time")
-    ap.add_argument("--color", choices=["class", "zone"], default="class", help="video: colour tiles by object type or tile size")
+    ap.add_argument("--color", choices=["class", "zone", "cost"], default="class",
+                    help="video: colour tiles by object type, tile size or traversability cost")
     ap.add_argument("--top", action="store_true", help="video: top-down camera instead of chase camera")
     ap.add_argument("--selftest", help=argparse.SUPPRESS)  # render the interactive scene to this file and exit
     a = ap.parse_args()
@@ -461,6 +506,8 @@ def main():
         feed.destroy_node()
         rclpy.try_shutdown()
     # Open3D's GUI leaves native threads behind that abort the interpreter at exit; skip that teardown.
+    sys.stdout.flush()
+    sys.stderr.flush()
     os._exit(0)
 
 

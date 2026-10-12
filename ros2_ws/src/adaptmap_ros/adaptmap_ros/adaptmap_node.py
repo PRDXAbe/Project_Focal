@@ -8,7 +8,8 @@ Publishes
   /adaptmap/grid/<zone>     grid_map_msgs/GridMap  (elevation, ground, std, class, confidence, color)
   /adaptmap/cells/<zone>    sensor_msgs/PointCloud2  class-coloured 2.5D cell centres at their height
   /adaptmap/labeled_cloud   sensor_msgs/PointCloud2  segmented points (odom frame, rgb)
-  /adaptmap/nav_grid        nav_msgs/OccupancyGrid  fused obstacle grid (Nav2-ready hook)
+  /adaptmap/costmap         nav_msgs/OccupancyGrid  traversability cost (0 free .. 100 lethal, -1 unknown) for Nav2
+  /adaptmap/terrain         grid_map_msgs/GridMap  slope, step, roughness, curb, cost layers
   /adaptmap/stats           std_msgs/String  JSON per-frame timings + cell statistics
 """
 import array
@@ -36,7 +37,7 @@ import threading
 
 ROOT = Path(os.environ.get("ADAPTMAP_ROOT", Path(__file__).resolve().parents[4]))
 sys.path.insert(0, str(ROOT))
-from adaptmap import classes  # noqa: E402
+from adaptmap import classes, terrain  # noqa: E402
 from adaptmap.config import load_config  # noqa: E402
 from adaptmap.foveated_map import FoveatedMap  # noqa: E402
 from adaptmap.preprocess import preprocess  # noqa: E402
@@ -63,18 +64,30 @@ def quat_to_rot(q):
         [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]], dtype=np.float32)
 
 
-def grid_map_msg(view, name, header):
-    """Our layer arrays are indexed [ix, iy] (x, y increasing). grid_map stores a column-major
+def gridmap_from_layers(layers, origin, res, header, basic="elevation"):
+    """layers: {name: (n, n) array indexed [ix, iy] (x, y increasing)}. grid_map stores a column-major
     matrix whose (0, 0) is the (+x, +y) corner, so flip both axes then flatten column-major."""
     m = GridMap()
     m.header = header
-    n, res = view["size"], view["resolution"]
+    n = next(iter(layers.values())).shape[0]
     m.info.resolution = float(res)
     m.info.length_x = m.info.length_y = float(n * res)
-    ox, oy = view["origin"]
+    ox, oy = origin
     m.info.pose.position.x = ox + n * res / 2
     m.info.pose.position.y = oy + n * res / 2
     m.info.pose.orientation.w = 1.0
+    for k, a in layers.items():
+        arr = Float32MultiArray()
+        arr.layout.dim = [MultiArrayDimension(label="column_index", size=n, stride=n * n),
+                          MultiArrayDimension(label="row_index", size=n, stride=n)]
+        arr.data = array.array("f", np.ascontiguousarray(a[::-1, ::-1].T, dtype=np.float32).tobytes())
+        m.layers.append(k)
+        m.data.append(arr)
+    m.basic_layers = [basic]
+    return m
+
+
+def grid_map_msg(view, name, header):
     cls = view["class"].cpu().numpy()
     valid = view["known"].cpu().numpy()  # observed or hole-filled
     layers = {
@@ -88,15 +101,26 @@ def grid_map_msg(view, name, header):
         "confidence": np.where(valid, view["confidence"].cpu().numpy(), np.nan),
         "color": np.where(valid, CLASS_RGB_FLOAT[cls], np.nan),
     }
-    for k, a in layers.items():
-        arr = Float32MultiArray()
-        arr.layout.dim = [MultiArrayDimension(label="column_index", size=n, stride=n * n),
-                          MultiArrayDimension(label="row_index", size=n, stride=n)]
-        arr.data = array.array("f", np.ascontiguousarray(a[::-1, ::-1].T, dtype=np.float32).tobytes())
-        m.layers.append(k)
-        m.data.append(arr)
-    m.basic_layers = ["elevation"]
-    return m
+    return gridmap_from_layers(layers, view["origin"], view["resolution"], header)
+
+
+def terrain_msgs(nv, t, header):
+    """Nav2-ready costmap (OccupancyGrid) + a GridMap with the terrain layers."""
+    cost = t["cost"]
+    g = OccupancyGrid(header=header)
+    n = cost.shape[0]
+    g.info.resolution = float(nv["resolution"])
+    g.info.width = g.info.height = n
+    g.info.origin.position.x, g.info.origin.position.y = nv["origin"]
+    g.info.origin.orientation.w = 1.0
+    g.data = array.array("b", cost.T.contiguous().cpu().numpy().tobytes())  # row-major, x fastest
+    known = torch.isfinite(nv["elevation"])
+    nan = torch.tensor(float("nan"), device=cost.device)
+    f = lambda x: torch.where(known, x.float(), nan).cpu().numpy()  # noqa: E731
+    layers = {"elevation": f(nv["elevation"]), "cost": f(torch.where(cost < 0, nan, cost.float())),
+              "slope_deg": f(t["slope_deg"]), "step": f(t["step"]), "roughness": f(t["roughness"]),
+              "curb": f(t["curb"]), "passable_under": f(t["passable_under"])}
+    return g, gridmap_from_layers(layers, nv["origin"], nv["resolution"], header)
 
 
 DIM_RGB_FLOAT = (np.stack([(_PACKED_RGB.numpy() >> s) & 255 for s in (16, 8, 0)], 1) * 0.55).astype(np.uint32)
@@ -154,7 +178,8 @@ class AdaptMapNode(Node):
         self.pub_grid = {z["name"]: self.create_publisher(GridMap, f"/adaptmap/grid/{z['name']}", 1) for z in self.cfg["zones"]}
         self.pub_cells = {z["name"]: self.create_publisher(PointCloud2, f"/adaptmap/cells/{z['name']}", 1) for z in self.cfg["zones"]}
         self.pub_cloud = self.create_publisher(PointCloud2, "/adaptmap/labeled_cloud", 1)
-        self.pub_nav = self.create_publisher(OccupancyGrid, "/adaptmap/nav_grid", 1)
+        self.pub_cost = self.create_publisher(OccupancyGrid, "/adaptmap/costmap", 1)
+        self.pub_terrain = self.create_publisher(GridMap, "/adaptmap/terrain", 1)
         self.pub_stats = self.create_publisher(String, "/adaptmap/stats", 10)
         self.frames = 0
         self.busy = False
@@ -245,7 +270,9 @@ class AdaptMapNode(Node):
         header = msg.header
         header.frame_id = self.frame
         export = self.map.export()
-        snap = (header, export, self.map.nav_view(cell=0.2, half=50.0, views=export), xyz, labels)
+        tc = self.cfg["terrain"]
+        nv = self.map.nav_view(cell=tc["costmap_cell"], half=tc["costmap_half"], views=export)
+        snap = (header, export, nv, xyz, labels)
         try:
             self.pub_queue.put_nowait(snap)
         except queue.Full:
@@ -264,7 +291,9 @@ class AdaptMapNode(Node):
                     self.pub_grid[name].publish(grid_map_msg(view, name, header))
                 self.pub_cells[name].publish(self.cell_cloud(view, header))
             self.pub_cloud.publish(xyzrgb_cloud(xyz, labels, header))
-            self.pub_nav.publish(self.nav_grid(nv, header))
+            cost, tgrid = terrain_msgs(nv, terrain.analyze(nv, self.cfg["terrain"]), header)
+            self.pub_cost.publish(cost)
+            self.pub_terrain.publish(tgrid)
             self.pub_ms = round((time.perf_counter() - t) * 1e3, 1)
 
     def cell_cloud(self, v, header):
@@ -275,22 +304,6 @@ class AdaptMapNode(Node):
         xyz = torch.stack([ox + (idx[:, 0].float() + 0.5) * r, oy + (idx[:, 1].float() + 0.5) * r,
                            v["elevation"][idx[:, 0], idx[:, 1]]], 1)
         return xyzrgb_cloud(xyz, v["class"][idx[:, 0], idx[:, 1]], header, dim=v["filled"][idx[:, 0], idx[:, 1]])
-
-    def nav_grid(self, nv, header):
-        cls, el = nv["class"], nv["elevation"]
-        known = torch.isfinite(el)
-        ground = classes.GROUND.to(cls.device)[cls]
-        occ = torch.full(cls.shape, -1, dtype=torch.int8, device=cls.device)
-        occ[known & ground] = 0
-        occ[known & ~ground & (cls != 0)] = 100
-        g = OccupancyGrid(header=header)
-        n = cls.shape[0]
-        g.info.resolution = nv["resolution"]
-        g.info.width = g.info.height = n
-        g.info.origin.position.x, g.info.origin.position.y = nv["origin"]
-        g.info.origin.orientation.w = 1.0
-        g.data = array.array("b", occ.T.contiguous().cpu().numpy().tobytes())  # row-major, x fastest
-        return g
 
 
 def main():

@@ -69,10 +69,10 @@ Visualization Manager:
       Style: Points
       Size (Pixels): 2
     - Class: rviz_default_plugins/Map
-      Name: nav grid
+      Name: traversability costmap
       Enabled: false
       Topic:
-        Value: /adaptmap/nav_grid
+        Value: /adaptmap/costmap
         Depth: 1
         Reliability Policy: Reliable
       Color Scheme: costmap

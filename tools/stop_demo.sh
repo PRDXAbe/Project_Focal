@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
 # Stop every process started by the AdaptMap demo launch.
-# Patterns use [x] brackets so pkill/pgrep never match the shell that runs them.
-pkill -INT -f "[r]os2 launch adaptmap" 2>/dev/null; sleep 4
-for p in "[g]z sim" "[r]viz2" "[p]arameter_bridge" "[a]daptmap_node" "[w]aypoint_driver" "[s]tatic_transform_publisher" "[r]os2 bag record"; do
-  pkill -f "$p" 2>/dev/null
+# Never kills its own ancestors (a calling shell whose command line mentions these names).
+ancestors=" "
+p=$$
+while [ -n "$p" ] && [ "$p" != 0 ]; do ancestors+="$p "; p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' '); done
+
+kill_matching() {  # $1 = signal, $2 = pgrep -f pattern
+  for pid in $(pgrep -f "$2"); do
+    case "$ancestors" in *" $pid "*) ;; *) kill "-$1" "$pid" 2>/dev/null ;; esac
+  done
+}
+
+kill_matching INT "ros2 launch adaptmap"; sleep 4
+for p in "gz sim" "rviz2" "parameter_bridge" "adaptmap_node" "waypoint_driver" "static_transform_publisher" \
+         "ros2 bag record" "nav2" "controller_server" "planner_server" "bt_navigator"; do
+  kill_matching TERM "$p"
 done
 sleep 1
-if pgrep -f "[g]z sim|[r]viz2|[a]daptmap_node" >/dev/null; then echo "some processes still running"; else echo "stopped"; fi
+left=$(for pid in $(pgrep -f "gz sim|rviz2|adaptmap_node"); do case "$ancestors" in *" $pid "*) ;; *) echo "$pid" ;; esac; done)
+if [ -n "$left" ]; then echo "some processes still running"; else echo "stopped"; fi

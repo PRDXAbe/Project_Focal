@@ -40,6 +40,25 @@ fusion:
   clear_min_hits: 1
   clear_factor: 0.5       # weight multiplier per scan for contradicted cells
 
+# Terrain analysis / traversability (adaptmap/terrain.py), limits of the rover
+terrain:
+  costmap_cell: 0.2       # navigation grid resolution (m)
+  costmap_half: 50.0      # navigation grid half-size (m)
+  robot_height: 1.0       # can drive under overhangs with more clearance than this (m)
+  max_step: 0.12          # highest step the wheels can climb (m); 0.15 m curbs are not climbable
+  max_slope_deg: 20.0
+  curb_min: 0.05          # a road<->sidewalk height jump in this range is a curb (m)
+  curb_max: 0.30
+  curb_lethal: true
+  slope_window: 0.6       # (m) windows for smoothing / neighbourhoods
+  step_window: 0.2
+  rough_window: 0.4
+  rough_max: 0.10         # roughness (std, m) that earns the full rough_cost
+  slope_cost: 40
+  rough_cost: 20
+  filled_cost: 10         # interpolated (hole-filled) cells are less certain
+  class_cost: {road: 0, sidewalk_curb: 30, terrain: 20, vegetation: 60, unknown: 50}
+
 model:
   backend: mmdet3d_minkunet   # mmdet3d_minkunet | geometric
   config: checkpoints/minkunet.py
