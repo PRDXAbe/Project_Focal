@@ -3,7 +3,10 @@
 The manifest lists every labelled object (AdaptMap class, pose, box size, or actor trajectory) so
 tools/autolabel.py can produce exact per-point labels for evaluation / fine-tuning.
 
-Usage: python tools/make_world.py  (writes ros2_ws/src/adaptmap_sim/worlds/urban.sdf + urban_manifest.json)
+Usage:
+  python tools/make_world.py              demo world  -> worlds/urban.sdf + urban_manifest.json
+  python tools/make_world.py --seed 11    randomised training world -> worlds/urban_s11.sdf + urban_s11_manifest.json
+    (random buildings, crates/barrels, lane car, trees and 4-7 pedestrians; the drive line y = -1 m stays clear)
 """
 import json
 import math
@@ -81,8 +84,17 @@ def actor(name, waypoints, speed=1.2):
         <trajectory id="0" type="walk">{wps}</trajectory></script></actor>""")
 
 
-def build():
-    rnd = random.Random(7)
+DRIVE_Y = -1.0  # scripted laps drive along this line; training worlds keep obstacles >= 1.3 m away
+
+
+def off_line_y(rnd):
+    """A y on the road that keeps a 0.8 m obstacle clear of the rover's drive line."""
+    return rnd.choice([rnd.uniform(0.6, 3.3), rnd.uniform(-3.5, -2.6)])
+
+
+def build(seed=None):
+    train = seed is not None
+    rnd = random.Random(7 if seed is None else seed)
     L = X1 - X0
     cx = (X0 + X1) / 2
     # ground layers: terrain everywhere (ground plane), road strip, raised sidewalks (curbs)
@@ -110,7 +122,7 @@ def build():
         for s in (-1, 1):
             cylinder(f"pole_{k}_{s}", "pole", x, s * (ROAD_W / 2 + 0.5), CURB_H, 0.08, 5.0, (0.3, 0.3, 0.3))
     # trees (trunk = pole class like SemanticKITTI, canopy = vegetation)
-    for k in range(8):
+    for k in range(rnd.randint(6, 16) if train else 8):
         x, y = rnd.uniform(-20, 110), rnd.choice((-1, 1)) * rnd.uniform(ROAD_W / 2 + WALK_W + 0.5, ROAD_W / 2 + WALK_W + 1.0)
         cylinder(f"trunk_{k}", "pole", x, y, 0.0, 0.15, 3.0, (0.4, 0.25, 0.1))
         sphere(f"canopy_{k}", "vegetation", x, y, 4.0, 1.6, (0.1, 0.5, 0.1))
@@ -119,11 +131,22 @@ def build():
         x = rnd.uniform(-30, 120)
         s = rnd.choice((-1, 1))
         car(f"car_{k}", x, s * (ROAD_W / 2 - 1.1), 0.0 if s > 0 else math.pi, rnd.choice(CARS))
-    car("car_lane", 45.0, 1.0, 0.1, CARS[2])
-    # misc obstacles: boxes / barrels
-    # fixed positions, clear of the demo drive line (y = -1.0)
-    for k, (x, y) in enumerate([(20, 2.0), (38, 2.2), (60, 2.2), (70, -3.0), (88, 2.0), (95, -3.0)]):
-        box(f"crate_{k}", "other_obstacle", x, y, 0.0, 0.8, 0.8, 0.8, color=(0.8, 0.4, 0.1))
+    if not train:
+        car("car_lane", 45.0, 1.0, 0.1, CARS[2])
+        # misc obstacles: fixed positions, clear of the demo drive line (y = -1.0)
+        for k, (x, y) in enumerate([(20, 2.0), (38, 2.2), (60, 2.2), (70, -3.0), (88, 2.0), (95, -3.0)]):
+            box(f"crate_{k}", "other_obstacle", x, y, 0.0, 0.8, 0.8, 0.8, color=(0.8, 0.4, 0.1))
+    else:
+        car("car_lane", rnd.uniform(15, 110), 1.3, rnd.uniform(-0.15, 0.15), rnd.choice(CARS))
+        for k in range(rnd.randint(6, 14)):
+            x, y = rnd.uniform(5, 115), off_line_y(rnd)
+            if rnd.random() < 0.6:
+                sz = rnd.uniform(0.4, 1.1)
+                box(f"crate_{k}", "other_obstacle", x, y, 0.0, sz, sz * rnd.uniform(0.7, 1.4), rnd.uniform(0.3, 1.2),
+                    yaw=rnd.uniform(0, math.pi), color=(rnd.uniform(0.5, 0.9), rnd.uniform(0.2, 0.5), 0.1))
+            else:
+                cylinder(f"barrel_{k}", "other_obstacle", x, y, 0.0, rnd.uniform(0.25, 0.45), rnd.uniform(0.6, 1.1),
+                         (0.2, 0.3, rnd.uniform(0.4, 0.8)))
     # sloped ramp (terrain) for elevation demo
     objs.append({"name": "ramp", "class": "terrain", "type": "box", "pose": [25, -20, 0.5, 0.0], "size": [12, 8, 1.0]})
     sdf.append(f"""
@@ -131,9 +154,19 @@ def build():
       <link name="l"><collision name="c"><geometry><box><size>12 8 1</size></box></geometry></collision>
       <visual name="v"><geometry><box><size>12 8 1</size></box></geometry>{mat(0.35, 0.55, 0.2)}</visual></link></model>""")
     # pedestrians: two along sidewalks, one crossing the road in front of the robot
-    actor("ped_0", [(5, 6.5), (40, 6.5)])
-    actor("ped_1", [(60, -6.5), (20, -6.5)])
-    actor("ped_2", [(18, -7), (18, 7)], speed=1.0)
+    if not train:
+        actor("ped_0", [(5, 6.5), (40, 6.5)])
+        actor("ped_1", [(60, -6.5), (20, -6.5)])
+        actor("ped_2", [(18, -7), (18, 7)], speed=1.0)
+    else:
+        for k in range(rnd.randint(4, 7)):
+            if rnd.random() < 0.6:  # walk along a sidewalk
+                s, x0 = rnd.choice((-1, 1)), rnd.uniform(0, 90)
+                y = s * rnd.uniform(5.0, 6.8)
+                actor(f"ped_{k}", [(x0, y), (x0 + rnd.uniform(15, 35), y)], speed=rnd.uniform(0.8, 1.5))
+            else:                   # cross the road
+                x0 = rnd.uniform(10, 110)
+                actor(f"ped_{k}", [(x0, -7.0), (x0 + rnd.uniform(-3, 3), 7.0)], speed=rnd.uniform(0.8, 1.4))
 
     world = f"""<?xml version="1.0"?>
 <sdf version="1.9">
@@ -155,10 +188,14 @@ def build():
 </sdf>
 """
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "urban.sdf").write_text(world)
-    (OUT / "urban_manifest.json").write_text(json.dumps({"objects": objs, "ground_class": "terrain"}, indent=1))
-    print(f"wrote {OUT/'urban.sdf'} with {len(objs)} labelled objects")
+    name = "urban" if seed is None else f"urban_s{seed}"
+    (OUT / f"{name}.sdf").write_text(world)
+    (OUT / f"{name}_manifest.json").write_text(json.dumps({"objects": objs, "ground_class": "terrain", "seed": seed}, indent=1))
+    print(f"wrote {OUT / (name + '.sdf')} with {len(objs)} labelled objects")
 
 
 if __name__ == "__main__":
-    build()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seed", type=int, help="build a randomised training world with this seed")
+    build(ap.parse_args().seed)

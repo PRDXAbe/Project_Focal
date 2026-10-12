@@ -52,7 +52,9 @@ def adaptive_downsample(xyz, zones):
 def preprocess(points, cfg, zones=None):
     """points: (N, >=3) tensor in sensor frame [x, y, z, (intensity)].
 
-    Returns filtered (M, 4) points with intensity replaced by a constant, plus per-stage counts.
+    Returns filtered (M, 4) points plus per-stage counts. Intensity is replaced by
+    cfg["constant_intensity"] (simulated LiDAR intensity isn't physical); set it to null to keep the
+    sensor's own intensity (real data, e.g. KITTI reflectance in [0, 1]).
     """
     stats = {"raw": points.shape[0]}
     xyz = points[:, :3]
@@ -64,12 +66,16 @@ def preprocess(points, cfg, zones=None):
     x0, x1, y0, y1, z0, z1 = cfg["self_box"]
     body = (xyz[:, 0] > x0) & (xyz[:, 0] < x1) & (xyz[:, 1] > y0) & (xyz[:, 1] < y1) & (xyz[:, 2] > z0) & (xyz[:, 2] < z1)
     m &= ~body
-    xyz = xyz[m]
-    stats["roi"] = xyz.shape[0]
-    xyz = xyz[isolation_filter(xyz, cfg["outlier_voxel"], cfg["outlier_min_pts"])]
-    stats["denoised"] = xyz.shape[0]
+    pts = points[m]
+    stats["roi"] = pts.shape[0]
+    pts = pts[isolation_filter(pts[:, :3], cfg["outlier_voxel"], cfg["outlier_min_pts"])]
+    stats["denoised"] = pts.shape[0]
     if cfg.get("adaptive_downsample") and zones:
-        xyz = xyz[adaptive_downsample(xyz, zones)]
-    stats["out"] = xyz.shape[0]
-    inten = torch.full((xyz.shape[0], 1), cfg["constant_intensity"], device=xyz.device, dtype=xyz.dtype)
+        pts = pts[adaptive_downsample(pts[:, :3], zones)]
+    stats["out"] = pts.shape[0]
+    xyz = pts[:, :3]
+    if cfg.get("constant_intensity") is None and points.shape[1] >= 4:
+        inten = pts[:, 3:4].clamp(0.0, 1.0)
+    else:
+        inten = torch.full((xyz.shape[0], 1), cfg.get("constant_intensity") or 0.0, device=xyz.device, dtype=xyz.dtype)
     return torch.cat([xyz, inten], 1), stats

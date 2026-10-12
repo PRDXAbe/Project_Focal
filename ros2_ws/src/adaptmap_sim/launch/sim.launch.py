@@ -1,20 +1,36 @@
-"""Gazebo urban world + rover + ros_gz bridge + static TFs."""
+"""Gazebo urban world + rover + ros_gz bridge + static TFs.
+
+world:=<name or path>  'urban.sdf' (default demo world), 'urban_s11.sdf', or an absolute .sdf path.
+"""
 import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction, SetEnvironmentVariable
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+
+def _gazebo(context):
+    share = get_package_share_directory("adaptmap_sim")
+    world = LaunchConfiguration("world").perform(context)
+    if not os.path.isabs(world):
+        # worlds generated after the last colcon build aren't installed yet: fall back to the source tree
+        installed = os.path.join(share, "worlds", world)
+        src = os.path.join(os.environ.get("ADAPTMAP_ROOT", os.path.expanduser("~/Projects/Project_Focal")),
+                           "ros2_ws", "src", "adaptmap_sim", "worlds", world)
+        world = installed if os.path.exists(installed) else src
+    return [ExecuteProcess(cmd=["gz", "sim", "-r", world], output="screen")]
 
 
 def generate_launch_description():
     share = get_package_share_directory("adaptmap_sim")
     models = os.path.join(share, "models")
-    world = os.path.join(share, "worlds", "urban.sdf")
     res = os.environ.get("GZ_SIM_RESOURCE_PATH", "")
     return LaunchDescription([
+        DeclareLaunchArgument("world", default_value="urban.sdf"),
         SetEnvironmentVariable("GZ_SIM_RESOURCE_PATH", models + (":" + res if res else "")),
-        ExecuteProcess(cmd=["gz", "sim", "-r", world], output="screen"),
+        OpaqueFunction(function=_gazebo),
         Node(package="ros_gz_bridge", executable="parameter_bridge", output="screen", arguments=[
             "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock",
             "/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist",

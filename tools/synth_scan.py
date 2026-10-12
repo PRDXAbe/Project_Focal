@@ -17,9 +17,24 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "ros2_ws" / "src" / "adaptmap_sim" / "worlds" / "urban_manifest.json"
 
 
-def load_boxes(t=0.0, device="cuda"):
+_MANIFESTS = {}
+
+
+def manifest_for(world):
+    """Manifest path for a world name ('urban', 'urban_s11') or an .sdf/.json path."""
+    w = Path(world)
+    if w.suffix == ".json":
+        return w
+    name = w.stem if w.suffix == ".sdf" else str(world)
+    return MANIFEST.parent / f"{name}_manifest.json"
+
+
+def load_boxes(t=0.0, device="cuda", manifest=None):
     from adaptmap import classes
-    objs = json.loads(MANIFEST.read_text())["objects"]
+    path = Path(manifest) if manifest else MANIFEST
+    if path not in _MANIFESTS:
+        _MANIFESTS[path] = json.loads(path.read_text())["objects"]
+    objs = _MANIFESTS[path]
     c, h, yaw, lab = [], [], [], []
     for o in objs:
         if o["type"] == "actor":

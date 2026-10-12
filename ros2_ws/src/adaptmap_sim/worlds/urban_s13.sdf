@@ -1,0 +1,293 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="urban">
+    <physics name="1ms" type="ignored"><max_step_size>0.004</max_step_size><real_time_factor>1.0</real_time_factor></physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors"><render_engine>ogre2</render_engine></plugin>
+    <scene><ambient>0.6 0.6 0.6 1</ambient><background>0.7 0.8 0.9 1</background><shadows>false</shadows></scene>
+    <light type="directional" name="sun"><cast_shadows>false</cast_shadows><pose>0 0 50 0 0 0</pose>
+      <diffuse>0.9 0.9 0.9 1</diffuse><direction>-0.4 0.2 -0.9</direction></light>
+    <model name="ground"><static>true</static>
+      <link name="l"><collision name="c"><geometry><plane><normal>0 0 1</normal><size>400 400</size></plane></geometry></collision>
+      <visual name="v"><geometry><plane><normal>0 0 1</normal><size>400 400</size></plane></geometry><material><ambient>0.45 0.6 0.3 1</ambient><diffuse>0.45 0.6 0.3 1</diffuse></material></visual></link></model>
+    <include><uri>model://rover</uri><name>rover</name><pose>0 -1.0 0.02 0 0 0</pose></include>
+    
+    <model name="road"><static>true</static><pose>45.0 0 0.01 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>170.0 8.0 0.02</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>170.0 8.0 0.02</size></box></geometry><material><ambient>0.15 0.15 0.15 1</ambient><diffuse>0.15 0.15 0.15 1</diffuse></material></visual></link></model>
+    <model name="sidewalk_l"><static>true</static><pose>45.0 -5.5 0.075 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>170.0 3.0 0.15</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>170.0 3.0 0.15</size></box></geometry><material><ambient>0.7 0.7 0.68 1</ambient><diffuse>0.7 0.7 0.68 1</diffuse></material></visual></link></model>
+    <model name="sidewalk_r"><static>true</static><pose>45.0 5.5 0.075 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>170.0 3.0 0.15</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>170.0 3.0 0.15</size></box></geometry><material><ambient>0.7 0.7 0.68 1</ambient><diffuse>0.7 0.7 0.68 1</diffuse></material></visual></link></model>
+    <model name="bldg_0_-1"><static>true</static><pose>-33.44594904970716 -14.052245754048332 8.096016968339582 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>13.108101900585684 12.104491508096665 16.192033936679163</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>13.108101900585684 12.104491508096665 16.192033936679163</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_0_1"><static>true</static><pose>-33.44594904970716 12.691675826896404 3.8829595090105067 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>13.108101900585684 9.383351653792808 7.765919018021013</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>13.108101900585684 9.383351653792808 7.765919018021013</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_1_-1"><static>true</static><pose>-13.361941808327115 -13.593944255541054 4.2834451829504445 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>18.808283226553275 11.18788851108211 8.566890365900889</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>18.808283226553275 11.18788851108211 8.566890365900889</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_1_1"><static>true</static><pose>-13.361941808327115 13.294740985176638 8.025939063019788 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>18.808283226553275 10.589481970353276 16.051878126039576</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>18.808283226553275 10.589481970353276 16.051878126039576</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_2_-1"><static>true</static><pose>7.170804902093504 -12.440130965820344 8.22770837519064 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>10.173188715545102 8.880261931640687 16.45541675038128</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>10.173188715545102 8.880261931640687 16.45541675038128</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_3_-1"><static>true</static><pose>29.24582549085282 -14.847970250386904 7.762623304591242 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>19.916384081637787 13.695940500773808 15.525246609182483</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>19.916384081637787 13.695940500773808 15.525246609182483</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_3_1"><static>true</static><pose>29.24582549085282 14.54981703834298 5.920712958197629 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>19.916384081637787 13.099634076685957 11.841425916395258</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>19.916384081637787 13.099634076685957 11.841425916395258</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_4_-1"><static>true</static><pose>54.3638683796688 -13.092607875659228 5.578933625160663 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>16.769663183220167 10.185215751318456 11.157867250321326</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>16.769663183220167 10.185215751318456 11.157867250321326</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_4_1"><static>true</static><pose>54.3638683796688 12.35208015172137 7.917861860752485 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>16.769663183220167 8.704160303442741 15.83572372150497</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>16.769663183220167 8.704160303442741 15.83572372150497</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_5_-1"><static>true</static><pose>80.6540802705659 -13.662679074954738 7.4904689485052725 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>21.82817422713844 11.325358149909475 14.980937897010545</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>21.82817422713844 11.325358149909475 14.980937897010545</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_5_1"><static>true</static><pose>80.6540802705659 14.030464695296043 5.660399729131576 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>21.82817422713844 12.060929390592085 11.320799458263153</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>21.82817422713844 12.060929390592085 11.320799458263153</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_6_-1"><static>true</static><pose>101.66709591422475 -12.759935268114045 5.756754141826732 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>12.43151958400714 9.519870536228089 11.513508283653463</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>12.43151958400714 9.519870536228089 11.513508283653463</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_6_1"><static>true</static><pose>101.66709591422475 13.187272106616216 3.7846857716382667 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>12.43151958400714 10.374544213232433 7.569371543276533</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>12.43151958400714 10.374544213232433 7.569371543276533</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_7_-1"><static>true</static><pose>119.7498233481055 -12.583406851475232 5.198639458318116 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>12.825363924982238 9.166813702950465 10.397278916636232</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>12.825363924982238 9.166813702950465 10.397278916636232</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="bldg_7_1"><static>true</static><pose>119.7498233481055 13.953695311302377 8.721996253594163 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>12.825363924982238 11.907390622604755 17.443992507188327</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>12.825363924982238 11.907390622604755 17.443992507188327</size></box></geometry><material><ambient>0.8 0.75 0.6 1</ambient><diffuse>0.8 0.75 0.6 1</diffuse></material></visual></link></model>
+    <model name="wall_0"><static>true</static><pose>60 14.5 0.6 0 0 0.0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>20 0.3 1.2</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>20 0.3 1.2</size></box></geometry><material><ambient>0.6 0.5 0.45 1</ambient><diffuse>0.6 0.5 0.45 1</diffuse></material></visual></link></model>
+    <model name="pole_0_-1"><static>true</static><pose>-35 -4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_0_1"><static>true</static><pose>-35 4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_1_-1"><static>true</static><pose>-20 -4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_1_1"><static>true</static><pose>-20 4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_2_-1"><static>true</static><pose>-5 -4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_2_1"><static>true</static><pose>-5 4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_3_-1"><static>true</static><pose>10 -4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_3_1"><static>true</static><pose>10 4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_4_-1"><static>true</static><pose>25 -4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_4_1"><static>true</static><pose>25 4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_5_-1"><static>true</static><pose>40 -4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_5_1"><static>true</static><pose>40 4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_6_-1"><static>true</static><pose>55 -4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_6_1"><static>true</static><pose>55 4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_7_-1"><static>true</static><pose>70 -4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_7_1"><static>true</static><pose>70 4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_8_-1"><static>true</static><pose>85 -4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_8_1"><static>true</static><pose>85 4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_9_-1"><static>true</static><pose>100 -4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_9_1"><static>true</static><pose>100 4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_10_-1"><static>true</static><pose>115 -4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="pole_10_1"><static>true</static><pose>115 4.5 2.65 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.08</radius><length>5.0</length></cylinder></geometry><material><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.3 0.3 0.3 1</diffuse></material></visual></link></model>
+    <model name="trunk_0"><static>true</static><pose>101.28711620551 -7.612452395788377 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_0"><static>true</static><pose>101.28711620551 -7.612452395788377 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <model name="trunk_1"><static>true</static><pose>44.74354136580516 7.819527757367862 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_1"><static>true</static><pose>44.74354136580516 7.819527757367862 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <model name="trunk_2"><static>true</static><pose>0.7683733501263426 7.868127677098816 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_2"><static>true</static><pose>0.7683733501263426 7.868127677098816 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <model name="trunk_3"><static>true</static><pose>12.666106709875265 7.601529146378462 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_3"><static>true</static><pose>12.666106709875265 7.601529146378462 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <model name="trunk_4"><static>true</static><pose>90.97504833314395 7.760176568167325 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_4"><static>true</static><pose>90.97504833314395 7.760176568167325 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <model name="trunk_5"><static>true</static><pose>65.39176544406246 -7.8613571580363235 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_5"><static>true</static><pose>65.39176544406246 -7.8613571580363235 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <model name="trunk_6"><static>true</static><pose>7.523039668829902 -7.790437276295554 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_6"><static>true</static><pose>7.523039668829902 -7.790437276295554 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <model name="trunk_7"><static>true</static><pose>56.85924787092364 7.791512611239007 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_7"><static>true</static><pose>56.85924787092364 7.791512611239007 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <model name="trunk_8"><static>true</static><pose>54.08541459123347 -7.647662536028305 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_8"><static>true</static><pose>54.08541459123347 -7.647662536028305 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <model name="trunk_9"><static>true</static><pose>1.382846402840233 -7.950308960771402 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_9"><static>true</static><pose>1.382846402840233 -7.950308960771402 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <model name="trunk_10"><static>true</static><pose>1.752679787492081 7.821763402205379 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_10"><static>true</static><pose>1.752679787492081 7.821763402205379 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <model name="trunk_11"><static>true</static><pose>52.29988876664008 -7.985553333310748 1.5 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.15</radius><length>3.0</length></cylinder></geometry><material><ambient>0.4 0.25 0.1 1</ambient><diffuse>0.4 0.25 0.1 1</diffuse></material></visual></link></model>
+    <model name="canopy_11"><static>true</static><pose>52.29988876664008 -7.985553333310748 4.0 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><sphere><radius>1.6</radius></sphere></geometry></collision>
+      <visual name="v"><geometry><sphere><radius>1.6</radius></sphere></geometry><material><ambient>0.1 0.5 0.1 1</ambient><diffuse>0.1 0.5 0.1 1</diffuse></material></visual></link></model>
+    <include><name>car_0</name><uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Hatchback</uri><static>true</static>
+      <pose>93.80346954955799 -2.9 0 0 0 3.141592653589793</pose></include>
+    <include><name>car_1</name><uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Hatchback</uri><static>true</static>
+      <pose>-11.027326362676437 2.9 0 0 0 0.0</pose></include>
+    <include><name>car_2</name><uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Hatchback</uri><static>true</static>
+      <pose>31.206617543291046 2.9 0 0 0 0.0</pose></include>
+    <include><name>car_3</name><uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Hatchback</uri><static>true</static>
+      <pose>110.76048337283413 2.9 0 0 0 0.0</pose></include>
+    <include><name>car_4</name><uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Hatchback%20blue</uri><static>true</static>
+      <pose>-29.142603591437155 2.9 0 0 0 0.0</pose></include>
+    <include><name>car_5</name><uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Hatchback%20blue</uri><static>true</static>
+      <pose>44.48386761519346 2.9 0 0 0 0.0</pose></include>
+    <include><name>car_6</name><uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Hatchback</uri><static>true</static>
+      <pose>70.42530097874935 2.9 0 0 0 0.0</pose></include>
+    <include><name>car_7</name><uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Hatchback%20blue</uri><static>true</static>
+      <pose>26.42516110246258 -2.9 0 0 0 3.141592653589793</pose></include>
+    <include><name>car_8</name><uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Pickup</uri><static>true</static>
+      <pose>8.747233255238385 -2.9 0 0 0 3.141592653589793</pose></include>
+    <include><name>car_9</name><uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/Pickup</uri><static>true</static>
+      <pose>33.72770770044463 -2.9 0 0 0 3.141592653589793</pose></include>
+    <include><name>car_lane</name><uri>https://fuel.gazebosim.org/1.0/OpenRobotics/models/SUV</uri><static>true</static>
+      <pose>88.42658455077205 1.3 0 0 0 0.02762715359185766</pose></include>
+    <model name="crate_0"><static>true</static><pose>75.47746634923016 -3.2147594067612957 0.15184308882059996 0 0 2.43112579336435</pose>
+      <link name="l"><collision name="c"><geometry><box><size>0.9307024630302624 1.0422623271080507 0.30368617764119993</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>0.9307024630302624 1.0422623271080507 0.30368617764119993</size></box></geometry><material><ambient>0.5761715306326889 0.34422032458669927 0.1 1</ambient><diffuse>0.5761715306326889 0.34422032458669927 0.1 1</diffuse></material></visual></link></model>
+    <model name="barrel_1"><static>true</static><pose>66.0091409300656 -3.2395079607125266 0.31314948706316664 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.27967346588308345</radius><length>0.6262989741263333</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.27967346588308345</radius><length>0.6262989741263333</length></cylinder></geometry><material><ambient>0.2 0.3 0.5474232102140901 1</ambient><diffuse>0.2 0.3 0.5474232102140901 1</diffuse></material></visual></link></model>
+    <model name="crate_2"><static>true</static><pose>22.188396781759295 -2.9570879753715626 0.34884144003209916 0 0 2.753425916413628</pose>
+      <link name="l"><collision name="c"><geometry><box><size>0.48979164488436555 0.4666334041275522 0.6976828800641983</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>0.48979164488436555 0.4666334041275522 0.6976828800641983</size></box></geometry><material><ambient>0.8959412945338031 0.2130726471939131 0.1 1</ambient><diffuse>0.8959412945338031 0.2130726471939131 0.1 1</diffuse></material></visual></link></model>
+    <model name="crate_3"><static>true</static><pose>63.855765480569275 -2.7766969357113833 0.5560518678443318 0 0 2.810267368174926</pose>
+      <link name="l"><collision name="c"><geometry><box><size>1.0210405437781067 1.2433830297181552 1.1121037356886636</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>1.0210405437781067 1.2433830297181552 1.1121037356886636</size></box></geometry><material><ambient>0.8649404492022241 0.4044760744640591 0.1 1</ambient><diffuse>0.8649404492022241 0.4044760744640591 0.1 1</diffuse></material></visual></link></model>
+    <model name="barrel_4"><static>true</static><pose>14.865241443228879 -3.436669488918219 0.4795936603803199 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.29275107092701</radius><length>0.9591873207606398</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.29275107092701</radius><length>0.9591873207606398</length></cylinder></geometry><material><ambient>0.2 0.3 0.6666349972125634 1</ambient><diffuse>0.2 0.3 0.6666349972125634 1</diffuse></material></visual></link></model>
+    <model name="crate_5"><static>true</static><pose>107.888051988626 -2.671598775035619 0.3961992342316319 0 0 0.16319380435444814</pose>
+      <link name="l"><collision name="c"><geometry><box><size>0.6751598599137489 0.4982389074477984 0.7923984684632638</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>0.6751598599137489 0.4982389074477984 0.7923984684632638</size></box></geometry><material><ambient>0.7453283701454448 0.4827733193349479 0.1 1</ambient><diffuse>0.7453283701454448 0.4827733193349479 0.1 1</diffuse></material></visual></link></model>
+    <model name="barrel_6"><static>true</static><pose>88.59930872445153 1.6010196666472316 0.321721155145534 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.3095703933548462</radius><length>0.643442310291068</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.3095703933548462</radius><length>0.643442310291068</length></cylinder></geometry><material><ambient>0.2 0.3 0.42083408216152124 1</ambient><diffuse>0.2 0.3 0.42083408216152124 1</diffuse></material></visual></link></model>
+    <model name="barrel_7"><static>true</static><pose>8.344644370477786 -3.4035610975943205 0.5022658542308721 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.4499255155528284</radius><length>1.0045317084617442</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.4499255155528284</radius><length>1.0045317084617442</length></cylinder></geometry><material><ambient>0.2 0.3 0.5697396163956502 1</ambient><diffuse>0.2 0.3 0.5697396163956502 1</diffuse></material></visual></link></model>
+    <model name="barrel_8"><static>true</static><pose>73.43455067061527 -2.8555820060465917 0.32366768998738377 0 0 0</pose>
+      <link name="l"><collision name="c"><geometry><cylinder><radius>0.2581573547563167</radius><length>0.6473353799747675</length></cylinder></geometry></collision>
+      <visual name="v"><geometry><cylinder><radius>0.2581573547563167</radius><length>0.6473353799747675</length></cylinder></geometry><material><ambient>0.2 0.3 0.5623034119491008 1</ambient><diffuse>0.2 0.3 0.5623034119491008 1</diffuse></material></visual></link></model>
+    <model name="ramp"><static>true</static><pose>25 -20 -0.3 0 0.15 0</pose>
+      <link name="l"><collision name="c"><geometry><box><size>12 8 1</size></box></geometry></collision>
+      <visual name="v"><geometry><box><size>12 8 1</size></box></geometry><material><ambient>0.35 0.55 0.2 1</ambient><diffuse>0.35 0.55 0.2 1</diffuse></material></visual></link></model>
+    <actor name="ped_0"><skin><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><scale>1.0</scale></skin>
+      <animation name="walk"><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><interpolate_x>true</interpolate_x></animation>
+      <script><loop>true</loop><auto_start>true</auto_start>
+        <trajectory id="0" type="walk"><waypoint><time>0.00</time><pose>13.576490287739158 5.269093215542537 1.0 0 0 0.000</pose></waypoint><waypoint><time>17.99</time><pose>34.594966625480765 5.269093215542537 1.0 0 0 3.142</pose></waypoint><waypoint><time>35.98</time><pose>13.576490287739158 5.269093215542537 1.0 0 0 0.000</pose></waypoint></trajectory></script></actor>
+    <actor name="ped_1"><skin><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><scale>1.0</scale></skin>
+      <animation name="walk"><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><interpolate_x>true</interpolate_x></animation>
+      <script><loop>true</loop><auto_start>true</auto_start>
+        <trajectory id="0" type="walk"><waypoint><time>0.00</time><pose>29.875722232258262 6.687060157849947 1.0 0 0 0.000</pose></waypoint><waypoint><time>14.30</time><pose>49.82175439188246 6.687060157849947 1.0 0 0 3.142</pose></waypoint><waypoint><time>28.60</time><pose>29.875722232258262 6.687060157849947 1.0 0 0 0.000</pose></waypoint></trajectory></script></actor>
+    <actor name="ped_2"><skin><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><scale>1.0</scale></skin>
+      <animation name="walk"><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><interpolate_x>true</interpolate_x></animation>
+      <script><loop>true</loop><auto_start>true</auto_start>
+        <trajectory id="0" type="walk"><waypoint><time>0.00</time><pose>51.61448341353275 -7.0 1.0 0 0 1.362</pose></waypoint><waypoint><time>11.38</time><pose>54.57395066823059 7.0 1.0 0 0 -1.779</pose></waypoint><waypoint><time>22.77</time><pose>51.61448341353275 -7.0 1.0 0 0 1.362</pose></waypoint></trajectory></script></actor>
+    <actor name="ped_3"><skin><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><scale>1.0</scale></skin>
+      <animation name="walk"><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><interpolate_x>true</interpolate_x></animation>
+      <script><loop>true</loop><auto_start>true</auto_start>
+        <trajectory id="0" type="walk"><waypoint><time>0.00</time><pose>13.956401508276299 6.040770696280054 1.0 0 0 0.000</pose></waypoint><waypoint><time>30.39</time><pose>48.1170673089503 6.040770696280054 1.0 0 0 3.142</pose></waypoint><waypoint><time>60.77</time><pose>13.956401508276299 6.040770696280054 1.0 0 0 0.000</pose></waypoint></trajectory></script></actor>
+    <actor name="ped_4"><skin><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><scale>1.0</scale></skin>
+      <animation name="walk"><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><interpolate_x>true</interpolate_x></animation>
+      <script><loop>true</loop><auto_start>true</auto_start>
+        <trajectory id="0" type="walk"><waypoint><time>0.00</time><pose>81.40997609205886 -7.0 1.0 0 0 1.430</pose></waypoint><waypoint><time>17.30</time><pose>83.39836657609618 7.0 1.0 0 0 -1.712</pose></waypoint><waypoint><time>34.60</time><pose>81.40997609205886 -7.0 1.0 0 0 1.430</pose></waypoint></trajectory></script></actor>
+    <actor name="ped_5"><skin><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><scale>1.0</scale></skin>
+      <animation name="walk"><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><interpolate_x>true</interpolate_x></animation>
+      <script><loop>true</loop><auto_start>true</auto_start>
+        <trajectory id="0" type="walk"><waypoint><time>0.00</time><pose>58.19338680895654 -7.0 1.0 0 0 1.570</pose></waypoint><waypoint><time>16.00</time><pose>58.19811809953757 7.0 1.0 0 0 -1.571</pose></waypoint><waypoint><time>31.99</time><pose>58.19338680895654 -7.0 1.0 0 0 1.570</pose></waypoint></trajectory></script></actor>
+    <actor name="ped_6"><skin><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><scale>1.0</scale></skin>
+      <animation name="walk"><filename>https://fuel.gazebosim.org/1.0/Mingfei/models/actor/tip/files/meshes/walk.dae</filename><interpolate_x>true</interpolate_x></animation>
+      <script><loop>true</loop><auto_start>true</auto_start>
+        <trajectory id="0" type="walk"><waypoint><time>0.00</time><pose>27.654710242599375 -6.593320653040138 1.0 0 0 0.000</pose></waypoint><waypoint><time>21.41</time><pose>52.59338415178354 -6.593320653040138 1.0 0 0 3.142</pose></waypoint><waypoint><time>42.81</time><pose>27.654710242599375 -6.593320653040138 1.0 0 0 0.000</pose></waypoint></trajectory></script></actor>
+  </world>
+</sdf>

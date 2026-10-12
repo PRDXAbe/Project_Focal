@@ -29,9 +29,9 @@ ADAPT_TO_RAW = {"unknown": 0, "road": 40, "sidewalk_curb": 48, "terrain": 72, "v
 RAW_LUT = torch.tensor([ADAPT_TO_RAW[n] for n in classes.NAMES], dtype=torch.int32)
 
 
-def label_points(xyz_world, t, margin=0.05):
-    """(N,3) world-frame points -> AdaptMap labels (N,)."""
-    c, h, yaw, lab = load_boxes(t, device=xyz_world.device)
+def label_points(xyz_world, t, margin=0.05, manifest=None):
+    """(N,3) world-frame points -> AdaptMap labels (N,), using that world's manifest (default: demo world)."""
+    c, h, yaw, lab = load_boxes(t, device=xyz_world.device, manifest=manifest)
     vol = (h + margin).prod(1)
     best = torch.full((xyz_world.shape[0],), float("inf"), device=xyz_world.device)
     out = torch.where(xyz_world[:, 2] < 0.1, classes.NAMES.index("terrain"), 0).long()

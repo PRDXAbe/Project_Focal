@@ -1278,5 +1278,6 @@
    "period": 28.0
   }
  ],
- "ground_class": "terrain"
+ "ground_class": "terrain",
+ "seed": null
 }
