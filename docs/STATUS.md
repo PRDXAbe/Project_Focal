@@ -1,5 +1,17 @@
 # Project status, last updated 2026-10-12
 
+## ▶ Resume here (new conversation)
+These two files (`CLAUDE.md` + this one) are the full context. **Don't re-explore the codebase or
+re-run old benchmarks.** Everything below is verified and committed (last commit `0afb7ef`,
+working tree clean).
+
+To start the next session:
+1. `ls /opt/ros/humble/share | grep -c '^nav2_bringup$'` gives 1 once Nav2 is installed. If it gives 0,
+   ask the user to run `sudo bash scripts/install_nav2.sh`.
+2. Continue with **"Not done", item 1 (P5 Nav2)** below, then items 2–6 in order.
+3. After each item: run `pytest`, write the result JSON to `docs/`, run `python3 tools/make_results.py`,
+   update this file, then commit and push. Author PRDXAbe, **no AI attribution**.
+
 Plan: phases P1–P9 (completion plan, approved 2026-10-12). Every phase is committed and pushed
 separately.
 
