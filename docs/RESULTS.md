@@ -62,7 +62,7 @@ Fine-tuned on auto-labelled scans from 12 randomised training worlds (`tools/gen
 | fine-tuned v1: 6 worlds (iter 9000) | 94 | 98 | 94 | 39 | 96 | 92 | 81 | 62 | 75 | **81.1** |
 | fine-tuned v2: 12 worlds + distillation, default (iter 7500) | 77 | 98 | 95 | 34 | 89 | 86 | 46 | 63 | 75 | **73.8** |
 
-v1 scores higher on this world but fails on the demo world's pickup truck (its flat bed is called road); v2 is the better model across both held-out worlds.
+v1 scores higher on this world but fails on the demo world's pickup truck (its flat bed is called road); averaged over both held-out worlds v2 is better, so it is the default.
 
 ### Simulation, demo world (second held-out world, recorded lap)
 

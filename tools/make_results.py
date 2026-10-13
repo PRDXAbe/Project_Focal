@@ -102,7 +102,7 @@ def main():
         rows.append((f"fine-tuned v2: 12 worlds + distillation, default (iter {best['iter']})",
                      {k: v / 100 for k, v in best["iou"].items()}, best["miou"]))
         L += iou_table(rows, ORDER) + ["", "v1 scores higher on this world but fails on the demo world's pickup truck "
-                                       "(its flat bed is called road); v2 is the better model across both held-out worlds.", ""]
+                                       "(its flat bed is called road); averaged over both held-out worlds v2 is better, so it is the default.", ""]
     demo = load("eval_demo_world.json")
     if demo:
         L += ["### Simulation, demo world (second held-out world, recorded lap)", ""]

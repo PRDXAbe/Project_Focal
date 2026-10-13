@@ -1,4 +1,4 @@
-# Project status, last updated 2026-10-12
+# Project status, last updated 2026-10-13
 
 ## ▶ Resume here (new conversation)
 These two files (`CLAUDE.md` + this one) are the full context. **Don't re-explore the codebase or
@@ -21,7 +21,7 @@ separately.
 | Phase | What | Key result |
 |---|---|---|
 | P0 | 1-day prototype: sim world + rover, pipeline, foveated map, ROS node, docs | `ceeb782` |
-| P1 | Performance: fp16 MinkUNet, async publishing, topic parameters | segmentation 65 → 27 ms; offline 37.5 ms/scan (27 Hz); mapping core live 9.3 scans/s |
+| P1 | Performance: fp16 MinkUNet, async publishing, topic parameters | segmentation 65 → 28.5 ms; offline 37.5 ms/scan (27 Hz); mapping core live 9.3 scans/s |
 | P2 | Map quality: ray clearing, ground surface, height above ground, clearance under overhangs, ring-gap hole filling | 6 tests |
 | P3 | Terrain: slope, step, roughness, curb detection, traversability costmap (`/adaptmap/costmap`) | 5 tests; viewer "Traversability" colouring |
 | P4 | Fine-tune for AdaptMap's 10 classes: seeded worlds, live auto-labelling (ground-contact fix), 10-class head, distillation | held-out demo world mIoU 51.4 → **90.2**; world 21: 46.6 → 73.8 |
@@ -46,8 +46,8 @@ separately.
    with intensity dropout/augmentation, testing on 05. This would give one model for both sim and
    real data.
 4. **P8 polish:**
-   - `docs/TESTING.md` "Does it make the robot faster?" still quotes old numbers (70 ms
-     segmentation). Update from `docs/results.json` / `live_summary.json`.
+   - ~~`docs/TESTING.md` numbers~~: done 2026-10-13 (speed table, "Known mistakes", 5.4× map
+     update, v1/v2 wording in `make_results.py`).
    - `docs/METHOD.md` §6–8: refresh the results summary and add claims for ray clearing,
      clearance, ring-gap filling, speed-adaptive resampling, the auto-labelling pipeline and
      distillation.
@@ -55,8 +55,9 @@ separately.
      add them).
 5. **P9 (optional).** A more complex robot URDF (e.g. a Husky description, or Go2 + CHAMP). Only
    the extrinsics (`lidar_offset`), topics and footprint should need changing.
-6. **Housekeeping.** `data/demo_20261010_211904` (1.6 GB, aborted run) can be deleted. Keep
-   `data/demo_20261010_212110/bag`: it's the demo-world evaluation set.
+6. **Housekeeping.** `data/demo_20261010_211904` is already deleted. Keep
+   `data/demo_20261010_212110/bag`: it's the demo-world evaluation set. Six other `data/demo_*`
+   runs (2026-10-10/12) are unreviewed; check which are needed before deleting.
 
 ## Where things are
 | Thing | Location |
@@ -69,7 +70,7 @@ separately.
 | Plan file | `~/.claude/plans/lorenzini-sih-ppt-pdf-ok-refactored-plum.md` |
 
 ## Headline numbers (from docs/RESULTS.md)
-- **Map:** 702,400 cells vs 16 M uniform (22.8× fewer), 19× less memory, map update 6× faster.
+- **Map:** 702,400 cells vs 16 M uniform (22.8× fewer), 19× less memory, map update 5.4× faster.
 - **Offline pipeline:** 37.5 ms/scan (27 Hz). Live with Gazebo + visualisation: 6.0 scans/s.
   Mapping core alone: 9.3 scans/s (the sensor rate).
 - **Segmentation, demo world:** 90.2 mIoU (fine-tuned v2) vs 51.4 (pretrained).

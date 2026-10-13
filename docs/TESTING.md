@@ -186,41 +186,44 @@ goal, a long route, a U-turn), with pass/fail and safety distances:
 
 ## Known mistakes you will see
 
-The neural network was trained on real city data (Germany, SemanticKITTI) and hasn't been retrained
-on this simulator. So:
-- Crates usually show as **building** (yellow).
-- Grass is often labelled **sidewalk**.
-- Now and then a car shows as vegetation.
+The default network is fine-tuned on auto-labelled scans from 12 simulated worlds
+(`tools/finetune.py`, model v2). It is much better than the original real-data network on this
+simulator (90 vs 51 mIoU on the demo world), but some mistakes remain:
+- **Vegetation** is the weakest class (34–61 % IoU depending on the world).
+- **Some vehicle types** are missed in less familiar worlds (46 % IoU on test world 21 vs 98 % on
+  the demo world).
 
-These are labelling errors, not mapping errors: the heights are still right. Retraining on
-auto-labelled sim scans (`tools/finetune.py`) is the next phase.
+These are labelling errors, not mapping errors: the heights are still right.
 
 ## Does it make the robot faster? (honest answer)
 
-Measured on this laptop (RTX 4050), per LiDAR scan:
+Measured on this laptop (RTX 4050), per LiDAR scan (offline benchmark, `docs/RESULTS.md`):
 
 | Stage | Plain uniform 5 cm map | AdaptMap |
 |---|---|---|
-| Recognising the dots (neural network) | ~70 ms | ~70 ms (unchanged) |
-| Building the map | 22 ms | **3.7 ms (6× faster)** |
-| Map memory | 671 MB | **35 MB (19× smaller)** |
+| Cleaning up the dots | 1.5 ms | 1.5 ms |
+| Recognising the dots (neural network, half precision) | 28.5 ms | 28.5 ms (unchanged) |
+| Building the map | 40.0 ms | **7.4 ms (5.4× faster)** |
+| Map memory | 916 MB | **48 MB (19× smaller)** |
 | Tiles a path planner has to look at | 16,000,000 | **702,400 (23× fewer)** |
-| **Total per scan** | ~94 ms | **~75 ms (~20 % faster)** |
+| **Total per scan** | ~70 ms (14 Hz) | **37.5 ms (27 Hz, ~1.9× faster)** |
 
 What this means:
 - **The map side gets much cheaper.**
-  - Mapping is 6× faster and memory is 19× smaller. On a robot computer such as a Jetson
-    (4–8 GB of memory shared by everything), 671 MB just for the map is a real problem; 35 MB isn't.
+  - Mapping is 5.4× faster and memory is 19× smaller. On a robot computer such as a Jetson
+    (4–8 GB of memory shared by everything), 916 MB just for the map is a real problem; 48 MB isn't.
   - Anything that reads the map (path planning, obstacle checks, sending the map over Wi-Fi to an
     operator or another robot) has 23× less to process.
-- **End-to-end, a scan gets about 20 % faster, not 20×.** The neural network is the slowest part,
-  and AdaptMap doesn't shrink its work.
+- **End-to-end, a scan gets about 1.9× faster, not 20×.** Once the network runs in half precision,
+  a uniform 5 cm map becomes the slowest part, and that is the part AdaptMap shrinks. The network
+  itself is unchanged.
   - We tested thinning out distant dots before the network: it cut the dots by 15 % but the network
     time by only 2.5 %. The network works on 5 cm blocks, and most dots are close to the robot.
-  - Making the network itself faster is a separate job: half-precision / TensorRT on the robot
-    computer, or a lighter network.
-- **In the live simulator the pipeline runs at about 5 scans per second**, because the same GPU is
-  also running Gazebo's laser simulation and the 3D windows. The pipeline alone runs at 13 scans per
+  - Making the network faster still is a separate job: TensorRT on the robot computer, or a
+    lighter network.
+- **In the live simulator the pipeline runs at about 6 scans per second**, because the same GPU is
+  also running Gazebo's laser simulation and the 3D windows (the network alone then takes ~100 ms
+  instead of 28.5 ms). Without the 3D windows the mapping keeps up with the sensor at 9.3 scans per
   second. On a real robot there is no simulator competing for the GPU.
 
 ## If something goes wrong
