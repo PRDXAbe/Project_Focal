@@ -1,0 +1,140 @@
+{
+ "best_test_miou": 0.8850687146186829,
+ "history": [
+  {
+   "iter": 0,
+   "miou": 0.4891374409198761,
+   "iou": {
+    "road": 84.9,
+    "sidewalk_curb": 74.7,
+    "terrain": 8.7,
+    "vegetation": 0.2,
+    "building_wall": 81.2,
+    "pole": 54.4,
+    "vehicle": 39.1,
+    "pedestrian": 54.3,
+    "other_obstacle": 42.7
+   }
+  },
+  {
+   "iter": 1500,
+   "miou": 0.8082678914070129,
+   "iou": {
+    "road": 96.8,
+    "sidewalk_curb": 97.6,
+    "terrain": 91.2,
+    "vegetation": 29.9,
+    "building_wall": 97.7,
+    "pole": 92.6,
+    "vehicle": 96.3,
+    "pedestrian": 51.5,
+    "other_obstacle": 73.8
+   }
+  },
+  {
+   "iter": 3000,
+   "miou": 0.836384117603302,
+   "iou": {
+    "road": 97.1,
+    "sidewalk_curb": 98.0,
+    "terrain": 92.3,
+    "vegetation": 46.3,
+    "building_wall": 98.1,
+    "pole": 94.2,
+    "vehicle": 97.0,
+    "pedestrian": 52.6,
+    "other_obstacle": 77.2
+   }
+  },
+  {
+   "iter": 4500,
+   "miou": 0.8610916137695312,
+   "iou": {
+    "road": 97.1,
+    "sidewalk_curb": 98.1,
+    "terrain": 92.4,
+    "vegetation": 65.9,
+    "building_wall": 98.4,
+    "pole": 95.0,
+    "vehicle": 97.3,
+    "pedestrian": 53.3,
+    "other_obstacle": 77.4
+   }
+  },
+  {
+   "iter": 6000,
+   "miou": 0.8731061220169067,
+   "iou": {
+    "road": 97.4,
+    "sidewalk_curb": 98.2,
+    "terrain": 93.2,
+    "vegetation": 75.8,
+    "building_wall": 98.4,
+    "pole": 95.4,
+    "vehicle": 97.2,
+    "pedestrian": 54.0,
+    "other_obstacle": 76.3
+   }
+  },
+  {
+   "iter": 7500,
+   "miou": 0.8810787200927734,
+   "iou": {
+    "road": 97.7,
+    "sidewalk_curb": 98.2,
+    "terrain": 94.0,
+    "vegetation": 78.2,
+    "building_wall": 98.4,
+    "pole": 95.9,
+    "vehicle": 97.4,
+    "pedestrian": 54.5,
+    "other_obstacle": 78.7
+   }
+  },
+  {
+   "iter": 9000,
+   "miou": 0.8838198184967041,
+   "iou": {
+    "road": 97.7,
+    "sidewalk_curb": 98.2,
+    "terrain": 94.4,
+    "vegetation": 79.1,
+    "building_wall": 98.4,
+    "pole": 95.7,
+    "vehicle": 97.4,
+    "pedestrian": 54.3,
+    "other_obstacle": 80.3
+   }
+  },
+  {
+   "iter": 10500,
+   "miou": 0.8850687146186829,
+   "iou": {
+    "road": 97.6,
+    "sidewalk_curb": 98.2,
+    "terrain": 94.1,
+    "vegetation": 79.0,
+    "building_wall": 98.4,
+    "pole": 96.0,
+    "vehicle": 97.5,
+    "pedestrian": 54.3,
+    "other_obstacle": 81.5
+   }
+  },
+  {
+   "iter": 12000,
+   "miou": 0.8849389553070068,
+   "iou": {
+    "road": 97.5,
+    "sidewalk_curb": 98.2,
+    "terrain": 93.7,
+    "vegetation": 79.4,
+    "building_wall": 98.4,
+    "pole": 96.0,
+    "vehicle": 97.5,
+    "pedestrian": 54.4,
+    "other_obstacle": 81.2
+   }
+  }
+ ]
+}
