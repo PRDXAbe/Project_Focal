@@ -54,15 +54,15 @@ Publishing runs on its own thread (178 ms per snapshot, 0 dropped). Peak GPU mem
 
 ### Simulation, held-out world (seed 21)
 
-Fine-tuned on auto-labelled scans from 12 randomised training worlds (`tools/gen_training_data.sh`, `tools/finetune.py`: 10-class AdaptMap head initialised from the KITTI classifier, class-balanced loss, distillation from the pretrained model). The test world was never used for training.
+Fine-tuned on auto-labelled scans from 12 randomised training worlds (`tools/gen_training_data.sh`, `tools/finetune.py`: 10-class AdaptMap head initialised from the KITTI classifier, class-balanced loss, distillation from the pretrained model). The test world was never used for training. All 245 test scans, evaluated with `tools/eval_sim_test.py`.
 
 | Model | road | sidewalk curb | terrain | vegetation | building wall | pole | vehicle | pedestrian | other obstacle | **mIoU** |
 |---|---|---|---|---|---|---|---|---|---|---|
-| pretrained (KITTI head mapped) | 68 | 74 | 9 | 0 | 73 | 57 | 34 | 60 | 44 | **46.6** |
-| fine-tuned v1: 6 worlds (iter 9000) | 94 | 98 | 94 | 39 | 96 | 92 | 81 | 62 | 75 | **81.1** |
-| fine-tuned v2: 12 worlds + distillation, default (iter 7500) | 77 | 98 | 95 | 34 | 89 | 86 | 46 | 63 | 75 | **73.8** |
+| pretrained (KITTI head mapped) | 85 | 75 | 9 | 0 | 81 | 55 | 38 | 60 | 39 | **49.0** |
+| fine-tuned v1: 6 worlds | 77 | 98 | 94 | 74 | 88 | 91 | 48 | 64 | 77 | **79.0** |
+| fine-tuned v2: 12 worlds + distillation, default | 96 | 98 | 96 | 72 | 98 | 96 | 93 | 65 | 82 | **88.4** |
 
-v1 scores higher on this world but fails on the demo world's pickup truck (its flat bed is called road); averaged over both held-out worlds v2 is better, so it is the default.
+Labels: an earlier version of `tools/fix_labels.py` (the ground-contact repair for the older recordings) relabelled whole car sides next to the robot as road wherever no ground was visible within 1 m, i.e. inside the LiDAR's blind disc. That made v2 look worse on vehicles (46 %) and v1 better; fixed and relabelled 2026-10-14. v1 was trained only on those corrupted worlds and learned the same mistake (vehicle 48 %). v2 is best on both held-out worlds, so it is the default.
 
 ### Simulation, demo world (second held-out world, recorded lap)
 

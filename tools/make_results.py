@@ -4,7 +4,7 @@ Inputs (each optional; missing sections are skipped):
   docs/results.json               tools/benchmark.py            offline latency, cells, memory
   docs/adaptive_zones.json        benchmark --speed runs        speed-adaptive zones
   docs/live_summary.json          tools/summarize_live.py       live ROS + Gazebo run
-  docs/finetune_history.json      tools/finetune.py             held-out world, before/after
+  docs/eval_world21.json          tools/eval_sim_test.py        held-out world (seed 21)
   docs/eval_demo_world.json       tools/eval_bag.py --json      second held-out world
   docs/semanticposs_results.json  tools/eval_semanticposs.py    real labelled data
   docs/kitti_*_summary.json       tools/run_dataset.py          real KITTI drive
@@ -86,23 +86,19 @@ def main():
               "at 9.3 scans/s (58 ms/scan).", "", "![live](figures/demo_frame.png)", ""]
 
     L += ["## Semantic segmentation", ""]
-    ft = load("finetune_history.json")
-    if ft:
-        h = ft["history"]
-        best = max(h, key=lambda r: r["miou"])
+    w21 = load("eval_world21.json")
+    if w21:
         L += ["### Simulation, held-out world (seed 21)", "",
               "Fine-tuned on auto-labelled scans from 12 randomised training worlds (`tools/gen_training_data.sh`, "
               "`tools/finetune.py`: 10-class AdaptMap head initialised from the KITTI classifier, class-balanced loss, "
-              "distillation from the pretrained model). The test world was never used for training.", ""]
-        rows = [("pretrained (KITTI head mapped)", {k: v / 100 for k, v in h[0]["iou"].items()}, h[0]["miou"])]
-        v1 = load("finetune_history_v1.json")
-        if v1:
-            b1 = max(v1["history"], key=lambda r: r["miou"])
-            rows.append((f"fine-tuned v1: 6 worlds (iter {b1['iter']})", {k: v / 100 for k, v in b1["iou"].items()}, b1["miou"]))
-        rows.append((f"fine-tuned v2: 12 worlds + distillation, default (iter {best['iter']})",
-                     {k: v / 100 for k, v in best["iou"].items()}, best["miou"]))
-        L += iou_table(rows, ORDER) + ["", "v1 scores higher on this world but fails on the demo world's pickup truck "
-                                       "(its flat bed is called road); averaged over both held-out worlds v2 is better, so it is the default.", ""]
+              f"distillation from the pretrained model). The test world was never used for training. All {w21[0]['scans']} "
+              "test scans, evaluated with `tools/eval_sim_test.py`.", ""]
+        L += iou_table([(r["model"], r["iou"], r["miou"]) for r in w21], ORDER)
+        L += ["", "Labels: an earlier version of `tools/fix_labels.py` (the ground-contact repair for the older recordings) "
+              "relabelled whole car sides next to the robot as road wherever no ground was visible within 1 m, i.e. "
+              "inside the LiDAR's blind disc. That made v2 look worse on vehicles (46 %) and v1 better; fixed and "
+              "relabelled 2026-10-14. v1 was trained only on those corrupted worlds and learned the same mistake "
+              "(vehicle 48 %). v2 is best on both held-out worlds, so it is the default.", ""]
     demo = load("eval_demo_world.json")
     if demo:
         L += ["### Simulation, demo world (second held-out world, recorded lap)", ""]

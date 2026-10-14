@@ -188,10 +188,11 @@ goal, a long route, a U-turn), with pass/fail and safety distances:
 
 The default network is fine-tuned on auto-labelled scans from 12 simulated worlds
 (`tools/finetune.py`, model v2). It is much better than the original real-data network on this
-simulator (90 vs 51 mIoU on the demo world), but some mistakes remain:
-- **Vegetation** is the weakest class (34–61 % IoU depending on the world).
-- **Some vehicle types** are missed in less familiar worlds (46 % IoU on test world 21 vs 98 % on
-  the demo world).
+simulator (90 vs 51 mIoU on the demo world, 88 vs 49 on test world 21), but some mistakes remain:
+- **Vegetation** is the weakest class (61–72 % IoU depending on the world).
+- **Pedestrians** are partly missed in the less familiar test world (65 % IoU there, 80 % on the demo
+  world). The navigation still keeps clear of people, because anything tall in the way is an obstacle
+  whatever its label; the label only adds the pedestrian keep-out and the walking prediction.
 
 These are labelling errors, not mapping errors: the heights are still right.
 

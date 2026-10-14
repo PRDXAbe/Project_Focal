@@ -22,7 +22,7 @@ The method is described in `docs/METHOD.md`; the numbers are in `docs/RESULTS.md
   - `foveated_map.py`: the map (fusion, ray clearing, views, `set_zones`).
   - `preprocess.py`, `segmentation.py`, `terrain.py`, `adaptive.py`, `classes.py`, `config.py`.
   - `motion.py`: pedestrian tracking and the predicted keep-out corridor for Nav2.
-  - `tests/`: 31 pytest tests; CPU-safe, also run by GitHub Actions.
+  - `tests/`: 32 pytest tests; CPU-safe, also run by GitHub Actions.
 - `configs/adaptmap.yaml`: every tunable value (zones, fusion, ray clearing, terrain limits,
   adaptive zones, model).
 - `ros2_ws/src/`:
@@ -87,4 +87,6 @@ The method is described in `docs/METHOD.md`; the numbers are in `docs/RESULTS.md
   100× slower and starve other threads.
 - **Auto-labels:** object boxes reach down to the ground. The ground-contact rule in
   `autolabel.py` (and `fix_labels.py` for older data) is essential; without it, about 60 % of
-  vehicle and pedestrian labels were really ground.
+  vehicle and pedestrian labels were really ground. `fix_labels.py` must never relabel points with
+  no ground within 1 m (next to the robot, the blind disc): an earlier version did, and corrupted
+  s11–s16 and the world-21 test labels (fixed 2026-10-14).

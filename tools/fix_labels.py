@@ -1,6 +1,7 @@
 """Fix ground-contact label noise in already-recorded auto-labelled scans (made before autolabel's
 ground-contact rule): object-labelled points within `lift` of the local ground (lowest ground-labelled
-point within 1 m) take the class of the nearest ground-labelled point. Originals go to labels_raw/.
+point within 1 m) take the class of the nearest ground-labelled point; points with no ground-labelled
+point within 1 m are left alone. Originals go to labels_raw/, and labels/ is always regenerated from them.
 
 Usage: .venv/bin/python tools/fix_labels.py data/sim_adapt data/sim_adapt_test
 """
@@ -27,7 +28,9 @@ def fix(lab_file, lift=0.10, radius=1.0):
     valid = np.isfinite(dist)
     nn_c = np.where(valid, nn, 0)
     gz = np.where(valid, gp[nn_c, 2], np.inf).min(1)
-    low = p[obj, 2] < gz + lift
+    # no ground within `radius` (e.g. next to the robot, inside the LiDAR's blind disc) means no evidence:
+    # leave the point alone (gz = inf made every such point "low" and relabelled whole car sides as road)
+    low = np.isfinite(gz) & (p[obj, 2] < gz + lift)
     new = lab.copy()
     idx = np.flatnonzero(obj)[low]
     new[idx] = gl[nn_c[low, 0]]

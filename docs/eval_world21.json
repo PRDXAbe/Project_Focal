@@ -1,0 +1,50 @@
+[
+ {
+  "model": "pretrained (KITTI head mapped)",
+  "miou": 0.49,
+  "iou": {
+   "road": 0.85,
+   "sidewalk_curb": 0.746,
+   "terrain": 0.087,
+   "vegetation": 0.002,
+   "building_wall": 0.81,
+   "pole": 0.549,
+   "vehicle": 0.375,
+   "pedestrian": 0.601,
+   "other_obstacle": 0.389
+  },
+  "scans": 245
+ },
+ {
+  "model": "fine-tuned v1: 6 worlds",
+  "miou": 0.7898,
+  "iou": {
+   "road": 0.767,
+   "sidewalk_curb": 0.984,
+   "terrain": 0.935,
+   "vegetation": 0.744,
+   "building_wall": 0.875,
+   "pole": 0.912,
+   "vehicle": 0.484,
+   "pedestrian": 0.641,
+   "other_obstacle": 0.766
+  },
+  "scans": 245
+ },
+ {
+  "model": "fine-tuned v2: 12 worlds + distillation, default",
+  "miou": 0.8843,
+  "iou": {
+   "road": 0.959,
+   "sidewalk_curb": 0.982,
+   "terrain": 0.955,
+   "vegetation": 0.724,
+   "building_wall": 0.983,
+   "pole": 0.957,
+   "vehicle": 0.93,
+   "pedestrian": 0.646,
+   "other_obstacle": 0.822
+  },
+  "scans": 245
+ }
+]
