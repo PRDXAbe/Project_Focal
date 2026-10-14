@@ -61,8 +61,9 @@ Fine-tuned on auto-labelled scans from 12 randomised training worlds (`tools/gen
 | pretrained (KITTI head mapped) | 85 | 75 | 9 | 0 | 81 | 55 | 38 | 60 | 39 | **49.0** |
 | fine-tuned v1: 6 worlds | 77 | 98 | 94 | 74 | 88 | 91 | 48 | 64 | 77 | **79.0** |
 | fine-tuned v2: 12 worlds + distillation, default | 96 | 98 | 96 | 72 | 98 | 96 | 93 | 65 | 82 | **88.4** |
+| fine-tuned v3: v2 recipe on corrected labels | 98 | 98 | 94 | 78 | 98 | 96 | 98 | 65 | 81 | **89.6** |
 
-Labels: an earlier version of `tools/fix_labels.py` (the ground-contact repair for the older recordings) relabelled whole car sides next to the robot as road wherever no ground was visible within 1 m, i.e. inside the LiDAR's blind disc. That made v2 look worse on vehicles (46 %) and v1 better; fixed and relabelled 2026-10-14. v1 was trained only on those corrupted worlds and learned the same mistake (vehicle 48 %). v2 is best on both held-out worlds, so it is the default.
+Labels: an earlier version of `tools/fix_labels.py` (the ground-contact repair for the older recordings) relabelled whole car sides next to the robot as road wherever no ground was visible within 1 m, i.e. inside the LiDAR's blind disc. That made v2 look worse on vehicles (46 %) and v1 better; fixed and relabelled 2026-10-14. v1 was trained only on those corrupted worlds and learned the same mistake (vehicle 48 %). v3 retrains the v2 recipe on the corrected labels: +1.2 mIoU here and +0.2 on the demo world, but 2 points lower on demo-world pedestrians; v2 stays the default (the navigation results were validated with it).
 
 ### Simulation, demo world (second held-out world, recorded lap)
 
@@ -71,6 +72,7 @@ Labels: an earlier version of `tools/fix_labels.py` (the ground-contact repair f
 | pretrained (SemanticKITTI) | 96 | 85 | 6 | 1 | 84 | 35 | 77 | 79 | 0 | **51.4** |
 | fine-tuned v1 (6 worlds) | 78 | 98 | 90 | 43 | 87 | 89 | 54 | 84 | 96 | **79.9** |
 | fine-tuned v2 (12 worlds + distillation, default) | 98 | 99 | 91 | 61 | 98 | 90 | 98 | 80 | 97 | **90.2** |
+| fine-tuned v3 (v2 recipe, corrected labels) | 98 | 99 | 90 | 63 | 98 | 91 | 99 | 78 | 97 | **90.4** |
 
 ### Real data: SemanticPOSS (labelled, 40-beam Pandora, university campus)
 

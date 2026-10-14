@@ -21,6 +21,8 @@ MODELS = [  # (row name, config, checkpoint, 10-class head already trained)
     ("fine-tuned v1: 6 worlds", "checkpoints/minkunet_adapt10.py", "checkpoints/minkunet_adapt10_v1.pth", True),
     ("fine-tuned v2: 12 worlds + distillation, default", "checkpoints/minkunet_adapt10.py",
      "checkpoints/minkunet_adapt10_v2.pth", True),
+    ("fine-tuned v3: v2 recipe on corrected labels", "checkpoints/minkunet_adapt10_v3.py",
+     "checkpoints/minkunet_adapt10_v3.pth", True),
 ]
 
 

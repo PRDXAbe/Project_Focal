@@ -98,7 +98,9 @@ def main():
               "relabelled whole car sides next to the robot as road wherever no ground was visible within 1 m, i.e. "
               "inside the LiDAR's blind disc. That made v2 look worse on vehicles (46 %) and v1 better; fixed and "
               "relabelled 2026-10-14. v1 was trained only on those corrupted worlds and learned the same mistake "
-              "(vehicle 48 %). v2 is best on both held-out worlds, so it is the default.", ""]
+              "(vehicle 48 %). v3 retrains the v2 recipe on the corrected labels: +1.2 mIoU here and +0.2 on the demo "
+              "world, but 2 points lower on demo-world pedestrians; v2 stays the default (the navigation results were "
+              "validated with it).", ""]
     demo = load("eval_demo_world.json")
     if demo:
         L += ["### Simulation, demo world (second held-out world, recorded lap)", ""]

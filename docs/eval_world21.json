@@ -46,5 +46,21 @@
    "other_obstacle": 0.822
   },
   "scans": 245
+ },
+ {
+  "model": "fine-tuned v3: v2 recipe on corrected labels",
+  "miou": 0.8961,
+  "iou": {
+   "road": 0.976,
+   "sidewalk_curb": 0.983,
+   "terrain": 0.942,
+   "vegetation": 0.779,
+   "building_wall": 0.984,
+   "pole": 0.965,
+   "vehicle": 0.975,
+   "pedestrian": 0.649,
+   "other_obstacle": 0.812
+  },
+  "scans": 245
  }
 ]

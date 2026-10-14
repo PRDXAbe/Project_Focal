@@ -49,5 +49,22 @@
    "pedestrian": 0.8018018007278442,
    "other_obstacle": 0.9688082933425903
   }
+ },
+ {
+  "model": "fine-tuned v3 (v2 recipe, corrected labels)",
+  "scans": 131,
+  "accuracy": 0.9895064830780029,
+  "miou": 0.9041880369186401,
+  "iou": {
+   "road": 0.9844099283218384,
+   "sidewalk_curb": 0.9860677123069763,
+   "terrain": 0.9043956995010376,
+   "vegetation": 0.6256864666938782,
+   "building_wall": 0.9847659468650818,
+   "pole": 0.9084972143173218,
+   "vehicle": 0.9916785359382629,
+   "pedestrian": 0.7831552624702454,
+   "other_obstacle": 0.9690360426902771
+  }
  }
 ]
