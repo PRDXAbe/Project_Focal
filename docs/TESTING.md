@@ -171,6 +171,18 @@ want the robot to go. You'll see:
 A goal *on* the sidewalk can't be reached: there's no way up the curb, and Nav2 reports failure
 instead of driving onto it.
 
+**Pedestrians.** In the demo world a pedestrian walks back and forth across the road at x = 18 m
+(about 14 s each way). Send the robot from its start (x = 0) to a goal on the road beyond them,
+around x = 25 m. In the **traversability costmap** layer, watch the red area around the walker:
+there is a disc around the person, plus a stripe stretching about 2–3 m **ahead of them** in the
+direction they walk. That stripe is the prediction (where they'll be in the next 2.5 s). The
+robot should slow down and stop a few metres away while the stripe crosses its lane, then carry
+on once the person has passed. Standing still doesn't make a stripe; only walking does.
+
+Two things that are simulator quirks, not bugs: the simulated pedestrian never avoids anything
+(it walks straight through a stopped robot), and occasionally the robot stops right on the
+crossing line instead of before it.
+
 To see what the planner sees, run the 3D viewer at the same time (`.venv/bin/python
 tools/view25d.py`) and choose **Colour tiles by: Traversability**:
 
@@ -182,7 +194,8 @@ tools/view25d.py`) and choose **Colour tiles by: Traversability**:
 
 Automatic check of five scenarios (pedestrian crossing, passing the lane car, refusing a sidewalk
 goal, a long route, a U-turn), with pass/fail and safety distances:
-`.venv/bin/python tools/nav_scenarios.py` (while nav is running).
+`.venv/bin/python tools/nav_scenarios.py --repeat 3` (while nav is running, about 13 min), then
+`python3 tools/make_results.py` to put the table into `docs/RESULTS.md`. All 15 runs should pass.
 
 ## Known mistakes you will see
 
