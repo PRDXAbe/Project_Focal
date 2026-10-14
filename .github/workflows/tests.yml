@@ -15,6 +15,6 @@ jobs:
       - name: Install CPU dependencies
         run: |
           pip install torch==2.1.2 --index-url https://download.pytorch.org/whl/cpu
-          pip install "numpy<2" pyyaml==6.0.3 pytest
-      - name: Unit tests (map, preprocessing, ray clearing, terrain) on CPU
+          pip install "numpy<2" pyyaml==6.0.3 scipy==1.15.3 pytest
+      - name: Unit tests (map, preprocessing, ray clearing, terrain, motion) on CPU
         run: python -m pytest -q adaptmap/tests
