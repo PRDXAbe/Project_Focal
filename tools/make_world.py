@@ -64,16 +64,22 @@ def car(name, x, y, yaw, kind):
 
 
 def actor(name, waypoints, speed=1.2):
-    """Walking pedestrian looping through waypoints (closed loop)."""
+    """Walking pedestrian looping through waypoints (closed loop) at constant speed.
+
+    Gazebo moves actors along a spline through the waypoints; with only the corners given it speeds up
+    and slows down (up to ~2.5 m off a constant-speed walk), so waypoints are placed ~1 s apart along
+    each leg. The manifest trajectory then matches the simulated actor (`synth_scan.actor_pose`)."""
     pts = waypoints + [waypoints[0]]
     t, traj = 0.0, []
-    for i, (x, y) in enumerate(pts):
-        if i:
-            px, py = pts[i - 1]
-            t += math.hypot(x - px, y - py) / speed
-        nx, ny = pts[min(i + 1, len(pts) - 1)] if i < len(pts) - 1 else pts[1]
-        yaw = math.atan2(ny - y, nx - x)
-        traj.append((t, x, y, yaw))
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        seg = math.hypot(x1 - x0, y1 - y0)
+        yaw = math.atan2(y1 - y0, x1 - x0)
+        n = max(1, math.ceil(seg / speed))
+        for k in range(n):
+            a = k / n
+            traj.append((round(t + a * seg / speed, 3), round(x0 + a * (x1 - x0), 3), round(y0 + a * (y1 - y0), 3), yaw))
+        t += seg / speed
+    traj.append((round(t, 3), pts[-1][0], pts[-1][1], traj[0][3]))
     objs.append({"name": name, "class": "pedestrian", "type": "actor", "size": [0.7, 0.7, 1.8],
                  "trajectory": traj, "period": t})
     wps = "".join(f"<waypoint><time>{tt:.2f}</time><pose>{x} {y} 1.0 0 0 {yw:.3f}</pose></waypoint>" for tt, x, y, yw in traj)

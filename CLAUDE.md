@@ -21,7 +21,8 @@ The method is described in `docs/METHOD.md`; the numbers are in `docs/RESULTS.md
 - `adaptmap/`: core library, no ROS dependency.
   - `foveated_map.py`: the map (fusion, ray clearing, views, `set_zones`).
   - `preprocess.py`, `segmentation.py`, `terrain.py`, `adaptive.py`, `classes.py`, `config.py`.
-  - `tests/`: 20 pytest tests; CPU-safe, also run by GitHub Actions.
+  - `motion.py`: pedestrian tracking and the predicted keep-out corridor for Nav2.
+  - `tests/`: 31 pytest tests; CPU-safe, also run by GitHub Actions.
 - `configs/adaptmap.yaml`: every tunable value (zones, fusion, ray clearing, terrain limits,
   adaptive zones, model).
 - `ros2_ws/src/`:
@@ -53,7 +54,8 @@ The method is described in `docs/METHOD.md`; the numbers are in `docs/RESULTS.md
   usually `source ros2_ws/install/setup.bash` too.
 - After adding launch files or packages: `cd ros2_ws && colcon build --symlink-install`.
 - **No passwordless sudo.** System installs go in a script under `scripts/` that the user runs.
-- **Nav2 is not installed yet.** The user needs to run `sudo bash scripts/install_nav2.sh`.
+- Nav2 is installed (`scripts/install_nav2.sh`). If `ros2` CLI commands fail with `!rclpy.ok()`, the daemon
+  is stale: use `ros2 daemon stop` or `--no-daemon`.
 
 ## Conventions
 - **Commits and PRs:** author is PRDXAbe (repo-local git config). **Never add Claude/AI

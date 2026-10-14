@@ -1,0 +1,392 @@
+[
+ {
+  "scenario": "pedestrian_crossing",
+  "goal": [
+   25.0,
+   -1.0
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 22.6,
+  "distance_m": 25.1,
+  "final_error_m": 0.34,
+  "left_road": false,
+  "min_clearance_static_m": 0.84,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 0,
+  "start": [
+   0.0,
+   -1.0,
+   0.0
+  ],
+  "description": "a pedestrian crosses the road at x = 18 m"
+ },
+ {
+  "scenario": "around_lane_car",
+  "goal": [
+   55.0,
+   1.5
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 25.8,
+  "distance_m": 30.2,
+  "final_error_m": 0.35,
+  "left_road": false,
+  "min_clearance_static_m": 0.52,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 0,
+  "start": [
+   25.0,
+   -1.0,
+   0.0
+  ],
+  "description": "a parked car blocks the lane at x = 45 m, crates nearby"
+ },
+ {
+  "scenario": "sidewalk_goal_refused",
+  "goal": [
+   65.0,
+   6.5
+  ],
+  "expected_success": false,
+  "reached": false,
+  "status": 5,
+  "passed": true,
+  "time_s": 61.0,
+  "distance_m": 26.2,
+  "final_error_m": 14.72,
+  "left_road": false,
+  "min_clearance_static_m": 0.45,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 0,
+  "start": [
+   55.0,
+   1.5,
+   0.0
+  ],
+  "description": "goal behind a 15 cm curb: must not climb it"
+ },
+ {
+  "scenario": "long_route",
+  "goal": [
+   110.0,
+   -2.0
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 46.1,
+  "distance_m": 54.6,
+  "final_error_m": 0.53,
+  "left_road": false,
+  "min_clearance_static_m": 1.16,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 0,
+  "start": [
+   55.0,
+   -1.0,
+   0.0
+  ],
+  "description": "55 m past crates and parked cars"
+ },
+ {
+  "scenario": "u_turn",
+  "goal": [
+   90.0,
+   2.0
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 19.7,
+  "distance_m": 20.5,
+  "final_error_m": 0.6,
+  "left_road": false,
+  "min_clearance_static_m": 0.93,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 0,
+  "start": [
+   110.0,
+   -2.0,
+   0.0
+  ],
+  "description": "turn around inside the 8 m road"
+ },
+ {
+  "scenario": "pedestrian_crossing",
+  "goal": [
+   25.0,
+   -1.0
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 30.9,
+  "distance_m": 25.1,
+  "final_error_m": 0.37,
+  "left_road": false,
+  "min_clearance_static_m": 1.18,
+  "min_clearance_pedestrian_m": -0.34,
+  "rover_speed_at_min_pedestrian_m_s": 0.0,
+  "drove_into_pedestrian": false,
+  "run": 1,
+  "start": [
+   0.0,
+   -1.0,
+   0.0
+  ],
+  "description": "a pedestrian crosses the road at x = 18 m"
+ },
+ {
+  "scenario": "around_lane_car",
+  "goal": [
+   55.0,
+   1.5
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 25.8,
+  "distance_m": 30.2,
+  "final_error_m": 0.33,
+  "left_road": false,
+  "min_clearance_static_m": 0.61,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 1,
+  "start": [
+   25.0,
+   -1.0,
+   0.0
+  ],
+  "description": "a parked car blocks the lane at x = 45 m, crates nearby"
+ },
+ {
+  "scenario": "sidewalk_goal_refused",
+  "goal": [
+   65.0,
+   6.5
+  ],
+  "expected_success": false,
+  "reached": false,
+  "status": 5,
+  "passed": true,
+  "time_s": 61.0,
+  "distance_m": 46.6,
+  "final_error_m": 7.68,
+  "left_road": false,
+  "min_clearance_static_m": 0.46,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 1,
+  "start": [
+   55.0,
+   1.5,
+   0.0
+  ],
+  "description": "goal behind a 15 cm curb: must not climb it"
+ },
+ {
+  "scenario": "long_route",
+  "goal": [
+   110.0,
+   -2.0
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 46.1,
+  "distance_m": 54.6,
+  "final_error_m": 0.52,
+  "left_road": false,
+  "min_clearance_static_m": 0.95,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 1,
+  "start": [
+   55.0,
+   -1.0,
+   0.0
+  ],
+  "description": "55 m past crates and parked cars"
+ },
+ {
+  "scenario": "u_turn",
+  "goal": [
+   90.0,
+   2.0
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 19.9,
+  "distance_m": 20.4,
+  "final_error_m": 0.54,
+  "left_road": false,
+  "min_clearance_static_m": 0.93,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 1,
+  "start": [
+   110.0,
+   -2.0,
+   0.0
+  ],
+  "description": "turn around inside the 8 m road"
+ },
+ {
+  "scenario": "pedestrian_crossing",
+  "goal": [
+   25.0,
+   -1.0
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 22.6,
+  "distance_m": 25.1,
+  "final_error_m": 0.33,
+  "left_road": false,
+  "min_clearance_static_m": 1.1,
+  "min_clearance_pedestrian_m": 1.48,
+  "rover_speed_at_min_pedestrian_m_s": 1.19,
+  "drove_into_pedestrian": false,
+  "run": 2,
+  "start": [
+   0.0,
+   -1.0,
+   0.0
+  ],
+  "description": "a pedestrian crosses the road at x = 18 m"
+ },
+ {
+  "scenario": "around_lane_car",
+  "goal": [
+   55.0,
+   1.5
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 25.9,
+  "distance_m": 30.3,
+  "final_error_m": 0.34,
+  "left_road": false,
+  "min_clearance_static_m": 0.84,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 2,
+  "start": [
+   25.0,
+   -1.0,
+   0.0
+  ],
+  "description": "a parked car blocks the lane at x = 45 m, crates nearby"
+ },
+ {
+  "scenario": "sidewalk_goal_refused",
+  "goal": [
+   65.0,
+   6.5
+  ],
+  "expected_success": false,
+  "reached": false,
+  "status": 5,
+  "passed": true,
+  "time_s": 61.0,
+  "distance_m": 26.8,
+  "final_error_m": 14.64,
+  "left_road": false,
+  "min_clearance_static_m": 0.44,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 2,
+  "start": [
+   55.0,
+   1.5,
+   0.0
+  ],
+  "description": "goal behind a 15 cm curb: must not climb it"
+ },
+ {
+  "scenario": "long_route",
+  "goal": [
+   110.0,
+   -2.0
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 46.3,
+  "distance_m": 54.8,
+  "final_error_m": 0.3,
+  "left_road": false,
+  "min_clearance_static_m": 0.96,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 2,
+  "start": [
+   55.0,
+   -1.0,
+   0.0
+  ],
+  "description": "55 m past crates and parked cars"
+ },
+ {
+  "scenario": "u_turn",
+  "goal": [
+   90.0,
+   2.0
+  ],
+  "expected_success": true,
+  "reached": true,
+  "status": 4,
+  "passed": true,
+  "time_s": 19.9,
+  "distance_m": 20.3,
+  "final_error_m": 0.57,
+  "left_road": false,
+  "min_clearance_static_m": 0.93,
+  "min_clearance_pedestrian_m": null,
+  "rover_speed_at_min_pedestrian_m_s": null,
+  "drove_into_pedestrian": false,
+  "run": 2,
+  "start": [
+   110.0,
+   -2.0,
+   0.0
+  ],
+  "description": "turn around inside the 8 m road"
+ }
+]

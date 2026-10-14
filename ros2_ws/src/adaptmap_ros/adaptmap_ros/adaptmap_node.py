@@ -41,6 +41,7 @@ from adaptmap import classes, terrain  # noqa: E402
 from adaptmap.adaptive import ZonePolicy  # noqa: E402
 from adaptmap.config import load_config  # noqa: E402
 from adaptmap.foveated_map import FoveatedMap  # noqa: E402
+from adaptmap.motion import MotionPredictor  # noqa: E402
 from adaptmap.preprocess import preprocess  # noqa: E402
 from adaptmap.segmentation import build_segmenter  # noqa: E402
 
@@ -105,8 +106,8 @@ def grid_map_msg(view, name, header):
     return gridmap_from_layers(layers, view["origin"], view["resolution"], header)
 
 
-def terrain_msgs(nv, t, header):
-    """Nav2-ready costmap (OccupancyGrid) + a GridMap with the terrain layers."""
+def costmap_msg(nv, t, header):
+    """Nav2-ready costmap (OccupancyGrid)."""
     cost = t["cost"]
     g = OccupancyGrid(header=header)
     n = cost.shape[0]
@@ -115,13 +116,19 @@ def terrain_msgs(nv, t, header):
     g.info.origin.position.x, g.info.origin.position.y = nv["origin"]
     g.info.origin.orientation.w = 1.0
     g.data = array.array("b", cost.T.contiguous().cpu().numpy().tobytes())  # row-major, x fastest
+    return g
+
+
+def terrain_grid_msg(nv, t, header):
+    """GridMap with the terrain layers."""
+    cost = t["cost"]
     known = torch.isfinite(nv["elevation"])
     nan = torch.tensor(float("nan"), device=cost.device)
     f = lambda x: torch.where(known, x.float(), nan).cpu().numpy()  # noqa: E731
     layers = {"elevation": f(nv["elevation"]), "cost": f(torch.where(cost < 0, nan, cost.float())),
               "slope_deg": f(t["slope_deg"]), "step": f(t["step"]), "roughness": f(t["roughness"]),
               "curb": f(t["curb"]), "passable_under": f(t["passable_under"])}
-    return g, gridmap_from_layers(layers, nv["origin"], nv["resolution"], header)
+    return gridmap_from_layers(layers, nv["origin"], nv["resolution"], header)
 
 
 DIM_RGB_FLOAT = (np.stack([(_PACKED_RGB.numpy() >> s) & 255 for s in (16, 8, 0)], 1) * 0.55).astype(np.uint32)
@@ -148,13 +155,15 @@ class AdaptMapNode(Node):
         self.declare_parameter("map_frame", "odom")
         self.declare_parameter("cloud_topic", "/lidar/points")
         self.declare_parameter("odom_topic", "/odom")
-        self.declare_parameter("viz_every", 3)          # snapshot (cells, cloud, nav grid) every N scans
+        self.declare_parameter("cost_every", 1)         # Nav2 costmap every N scans (on the mapping thread)
+        self.declare_parameter("viz_every", 3)          # snapshot (cells, cloud, terrain grid) every N scans
         self.declare_parameter("gridmap_every", 2)      # ...and the heavier per-zone GridMaps every N snapshots
         self.declare_parameter("stats_log", "")
         # sensor pose in base_link (the rover's fixed mast); avoids a TF listener, see on_odom
         self.declare_parameter("lidar_offset", [0.0, 0.0, 1.73])
         self.cfg = load_config(self.get_parameter("config").value)
         self.frame = self.get_parameter("map_frame").value
+        self.cost_every = self.get_parameter("cost_every").value
         self.viz_every = self.get_parameter("viz_every").value
         self.gridmap_every = self.get_parameter("gridmap_every").value
         self.snapshots = 0
@@ -167,6 +176,8 @@ class AdaptMapNode(Node):
         ac = self.cfg.get("adaptive_zones", {})
         self.policy = ZonePolicy(self.cfg["zones"], ac, self.map.snap) if ac.get("enabled") else None
         self.speed = 0.0
+        mc = self.cfg["terrain"].get("motion", {})
+        self.motion = MotionPredictor(mc) if mc.get("enabled") else None
         self.get_logger().info(f"AdaptMap ready: {self.map.stats()['total_cells']} cells, model={self.cfg['model']['backend']}")
 
         # Robot pose from /odom (depth 1, own thread) into a short history; the Python TF listener
@@ -252,14 +263,32 @@ class AdaptMapNode(Node):
                 self.map.set_zones(zones)
                 self.get_logger().info(f"speed {self.speed:.1f} m/s -> 5 cm zone radius {zones[0]['half_extent']:.1f} m")
         self.map.integrate(xyz, probs, tt[:2], stamp, origin=tt)  # origin enables ray clearing
+        hl, hw = self.cfg["terrain"].get("robot_half_size", (0.0, 0.0))
+        yaw = float(np.arctan2(R[1, 0], R[0, 0]))
+        if hl > 0:  # the robot stands on these cells; anything stored there is stale (blind disc)
+            self.map.clear_footprint(t[:2], yaw, hl, hw)
         sync(); tm["fuse"] = time.perf_counter() - t2
         tm["total"] = time.perf_counter() - t0
 
         self.frames += 1
-        if self.frames % self.viz_every == 0:
+        viz = self.frames % self.viz_every == 0
+        if viz or self.frames % self.cost_every == 0:
+            # the costmap goes out right away, on this thread: Nav2 must not wait behind the visualisation
             t3 = time.perf_counter()
-            self.queue_publish(msg, xyz, labels)
-            tm["snapshot"] = time.perf_counter() - t3
+            header = msg.header
+            header.frame_id = self.frame
+            export = self.map.export()
+            tc = self.cfg["terrain"]
+            nv = self.map.nav_view(cell=tc["costmap_cell"], half=tc["costmap_half"], views=export)
+            t_an = terrain.analyze(nv, tc)
+            if self.motion is not None:   # lethal corridors ahead of walking pedestrians
+                terrain.add_lethal(t_an, self.motion.update(t_an["dynamic"], nv["origin"], nv["resolution"], stamp))
+            if hl > 0:
+                terrain.free_footprint(t_an, nv, t[:2], yaw, hl, hw)
+            self.pub_cost.publish(costmap_msg(nv, t_an, header))
+            tm["costmap"] = time.perf_counter() - t3
+            if viz:
+                self.queue_publish((header, export, nv, t_an, xyz, labels))
 
         s = self.map.stats()
         rec = {"stamp": stamp, "frame": self.frames, "timing_ms": {k: round(v * 1e3, 2) for k, v in tm.items()},
@@ -267,7 +296,9 @@ class AdaptMapNode(Node):
                "total_cells": s["total_cells"], "uniform_cells": s["uniform_cells"], "map_bytes": s["map_bytes"],
                "gpu_mem_mb": round(torch.cuda.max_memory_allocated() / 2**20, 1) if self.dev.startswith("cuda") else 0,
                "publish_ms": self.pub_ms, "publish_dropped": self.pub_dropped, "cleared": s["cleared"],
-               "zone_halves": [z["half_extent"] for z in self.map.zones], "speed": round(self.speed, 2)}
+               "zone_halves": [z["half_extent"] for z in self.map.zones], "speed": round(self.speed, 2),
+               "moving": [[round(float(v), 2) for v in (*t["pos"], *t["vel"])] for t in self.motion.moving()]
+               if self.motion is not None else []}
         self.pub_stats.publish(String(data=json.dumps(rec)))
         if self.log:
             self.log.write(json.dumps(rec) + "\n")
@@ -276,14 +307,8 @@ class AdaptMapNode(Node):
             self.get_logger().info(f"frame {self.frames}: {rec['timing_ms']} ms, pts {pstats['out']}")
 
     # ---------------------------------------------------------------- publishing
-    def queue_publish(self, msg, xyz, labels):
-        """Snapshot the map on the mapping thread (fresh tensors, cheap) and hand it to the publisher."""
-        header = msg.header
-        header.frame_id = self.frame
-        export = self.map.export()
-        tc = self.cfg["terrain"]
-        nv = self.map.nav_view(cell=tc["costmap_cell"], half=tc["costmap_half"], views=export)
-        snap = (header, export, nv, xyz, labels)
+    def queue_publish(self, snap):
+        """Hand a map snapshot (fresh tensors from the mapping thread) to the publisher thread."""
         try:
             self.pub_queue.put_nowait(snap)
         except queue.Full:
@@ -292,7 +317,7 @@ class AdaptMapNode(Node):
     def publish_worker(self):
         while rclpy.ok():
             try:
-                header, export, nv, xyz, labels = self.pub_queue.get(timeout=0.5)
+                header, export, nv, t_an, xyz, labels = self.pub_queue.get(timeout=0.5)
             except queue.Empty:
                 continue
             t = time.perf_counter()
@@ -302,9 +327,7 @@ class AdaptMapNode(Node):
                     self.pub_grid[name].publish(grid_map_msg(view, name, header))
                 self.pub_cells[name].publish(self.cell_cloud(view, header))
             self.pub_cloud.publish(xyzrgb_cloud(xyz, labels, header))
-            cost, tgrid = terrain_msgs(nv, terrain.analyze(nv, self.cfg["terrain"]), header)
-            self.pub_cost.publish(cost)
-            self.pub_terrain.publish(tgrid)
+            self.pub_terrain.publish(terrain_grid_msg(nv, t_an, header))
             self.pub_ms = round((time.perf_counter() - t) * 1e3, 1)
 
     def cell_cloud(self, v, header):

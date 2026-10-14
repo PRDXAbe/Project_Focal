@@ -88,3 +88,17 @@ SemanticPOSS has one 'ground' class, so road / sidewalk / terrain are merged. Di
 154 real HDL-64 scans with GPS/IMU poses through the full pipeline (`tools/run_dataset.py`): preprocess 2.2 ms, segmentation 41.3 ms, fusion 8.6 ms, total **52.1 ms (19.2 Hz)**; 121,708 raw → 121,163 points per scan.
 
 ![kitti](figures/kitti_2011_09_26_drive_0005_sync.png)
+
+## Autonomous navigation (Nav2 on the AdaptMap costmap)
+
+**15/15 scenario runs passed** (5 scenarios × 3 runs, `tools/nav_scenarios.py --repeat 3`; the rover is teleported to each scenario's start, pedestrian timing differs per run). Pass = expected outcome (reach the goal, or refuse a goal behind a curb), never left the road, no contact with a static obstacle, and no contact with a pedestrian while moving. Clearances are from the rover's footprint outline; the worst run is shown.
+
+| Scenario | Expected | Passed | Time (median) | Distance (median) | Min clearance (static) | Min distance to pedestrians | Rover speed there |
+|---|---|---|---|---|---|---|---|
+| pedestrian crossing | reach | 3/3 ✅ | 22.6 s | 25.1 m | 0.84 m | -0.34 m ¹ | 0.00 m/s |
+| around lane car | reach | 3/3 ✅ | 25.8 s | 30.2 m | 0.52 m | – | – |
+| sidewalk goal refused | refuse | 3/3 ✅ | 61.0 s | 26.8 m | 0.44 m | – | – |
+| long route | reach | 3/3 ✅ | 46.1 s | 54.6 m | 0.95 m | – | – |
+| u turn | reach | 3/3 ✅ | 19.9 s | 20.4 m | 0.93 m | – | – |
+
+¹ Contact while the rover was stopped: it yielded, but stopped with its body on the crossing line, and the simulated pedestrian (a Gazebo actor, which never avoids anything) walked into it. The rover was never moving while in contact. Stopping *before* a crossing instead of on it is a known limitation.

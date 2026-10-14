@@ -1,16 +1,16 @@
-# Project status, last updated 2026-10-13
+# Project status, last updated 2026-10-14
 
 ## ▶ Resume here (new conversation)
 These two files (`CLAUDE.md` + this one) are the full context. **Don't re-explore the codebase or
-re-run old benchmarks.** Everything below is verified and committed (last commit `0afb7ef`,
-working tree clean).
+re-run old benchmarks.** Everything below is verified, committed and pushed (working tree clean
+after the P5 commit).
 
 To start the next session:
-1. `ls /opt/ros/humble/share | grep -c '^nav2_bringup$'` gives 1 once Nav2 is installed. If it gives 0,
-   ask the user to run `sudo bash scripts/install_nav2.sh`.
-2. Continue with **"Not done", item 1 (P5 Nav2)** below, then items 2–6 in order.
-3. After each item: run `pytest`, write the result JSON to `docs/`, run `python3 tools/make_results.py`,
+1. Continue with **"Not done", item 1 (P4 follow-up)** below, then the remaining items in order.
+2. After each item: run `pytest`, write the result JSON to `docs/`, run `python3 tools/make_results.py`,
    update this file, then commit and push. Author PRDXAbe, **no AI attribution**.
+3. Running the Nav2 stack: `ros2 launch adaptmap_nav nav.launch.py rviz:=false`; scenarios:
+   `.venv/bin/python tools/nav_scenarios.py --repeat 3` (about 13 min); stop with `bash tools/stop_demo.sh`.
 
 Plan: phases P1–P9 (completion plan, approved 2026-10-12). Every phase is committed and pushed
 separately.
@@ -28,34 +28,28 @@ separately.
 | P6 | Real data | KITTI drive 0005: full pipeline 52 ms/scan (19 Hz) + video. SemanticPOSS: pretrained 43.6 mIoU; sim model with constant intensity 38.3 (pedestrians 7 → 53 %) |
 | P7 | Speed-adaptive zones (`set_zones`, `ZonePolicy`) | 5 cm zone 10 m → 15.5 m @ 5 m/s → 25 m @ 8 m/s (1.33 M cells) |
 | P8 (part) | CI (GitHub Actions, CPU pytest), launch_testing smoke test (3/3 pass), `make_results.py`, README/METHOD/TESTING updates | |
+| P5 | Nav2 on the AdaptMap costmap (SmacPlanner2D + RegulatedPurePursuit), 5 scripted scenarios run 3× each. New method parts: *appearance* (a new obstacle replaces a cell in one scan instead of being averaged in over ~1 s), ground clearing, 1 m pedestrian keep-out, **motion-aware keep-out** (`adaptmap/motion.py`: pedestrian tracks → lethal corridor of the next 2.5 s, measured from the blob's front edge), footprint clearing (map + published costmap never lethal under the rover), costmap every scan | **15/15 runs pass** (`docs/nav_results.json`); 31 tests. Video `docs/figures/nav_demo.mp4` (local, choppy 1.3 fps: sim + renderer share the GPU; re-record with `--top` if needed). Known limitation: the rover sometimes yields *on* the crossing line instead of before it; a Gazebo actor then walks into the stopped rover (footnote in RESULTS) |
 
 ### Not done ⬜ (next steps, in order)
-1. **P5 Nav2: blocked on install.** The user runs `sudo bash scripts/install_nav2.sh`, then:
-   - `cd ros2_ws && colcon build --symlink-install`
-   - `ros2 launch adaptmap_nav nav.launch.py`, and check that a "2D Goal Pose" click in RViz
-     drives the rover;
-   - tune `ros2_ws/src/adaptmap_nav/params/nav2.yaml` if needed. Likely suspects: whether the
-     StaticLayer accepts the rolling costmap, `trinary_costmap: false`, inflation;
-   - `.venv/bin/python tools/nav_scenarios.py` → `docs/nav_results.json` → `make_results.py`;
-   - record a Nav2 demo video (`view25d.py --video ... --color cost`).
-2. **P4 follow-up.** v2 scores only 46 % on world-21 vehicles (v1: 81 %). Find which car or
+1. **P4 follow-up.** v2 scores only 46 % on world-21 vehicles (v1: 81 %). Find which car or
    object type fails, the way the demo-world pickup case was diagnosed (confusion rows + nearest
    manifest object; that script was a scratchpad file). Options: more worlds with that vehicle
    type, a lower distillation weight (0.3), or combining v1 + v2 data.
-3. **Real-data accuracy (optional).** Fine-tune on mixed sim + SemanticPOSS sequences 00–04,
+2. **Real-data accuracy (optional).** Fine-tune on mixed sim + SemanticPOSS sequences 00–04,
    with intensity dropout/augmentation, testing on 05. This would give one model for both sim and
    real data.
-4. **P8 polish:**
+3. **P8 polish:**
    - ~~`docs/TESTING.md` numbers~~: done 2026-10-13 (speed table, "Known mistakes", 5.4× map
      update, v1/v2 wording in `make_results.py`).
    - `docs/METHOD.md` §6–8: refresh the results summary and add claims for ray clearing,
-     clearance, ring-gap filling, speed-adaptive resampling, the auto-labelling pipeline and
-     distillation.
+     clearance, ring-gap filling, speed-adaptive resampling, the auto-labelling pipeline,
+     distillation, and the P5 parts (appearance, ground clearing, motion-aware keep-out, footprint
+     clearing, per-scan costmap).
    - Final demo videos into `docs/figures/` (not in git: `*.mp4` is ignored; decide whether to
      add them).
-5. **P9 (optional).** A more complex robot URDF (e.g. a Husky description, or Go2 + CHAMP). Only
+4. **P9 (optional).** A more complex robot URDF (e.g. a Husky description, or Go2 + CHAMP). Only
    the extrinsics (`lidar_offset`), topics and footprint should need changing.
-6. **Housekeeping.** `data/demo_20261010_211904` is already deleted. Keep
+5. **Housekeeping.** `data/demo_20261010_211904` is already deleted. Keep
    `data/demo_20261010_212110/bag`: it's the demo-world evaluation set. Six other `data/demo_*`
    runs (2026-10-10/12) are unreviewed; check which are needed before deleting.
 
@@ -76,3 +70,5 @@ separately.
 - **Segmentation, demo world:** 90.2 mIoU (fine-tuned v2) vs 51.4 (pretrained).
 - **Real data:** KITTI 19 Hz end to end; SemanticPOSS 43.6 mIoU (pretrained, unseen 40-beam
   sensor).
+- **Navigation:** Nav2 on the AdaptMap costmap, 15/15 scenario runs (crossing pedestrian, parked car,
+  curb refusal, 55 m route, U-turn).

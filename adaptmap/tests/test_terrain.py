@@ -68,3 +68,26 @@ def test_obstacle_lethal_but_overhang_passable():
     assert t["cost"][at(4.2, 0)].item() == terrain.LETHAL
     assert t["passable_under"][at(7.5, 0)]
     assert t["cost"][at(7.5, 0)].item() < terrain.LETHAL
+
+
+def test_pedestrian_keep_out_but_not_crate():
+    ground = plane(2, 14, -3, 3, lambda x, y: torch.zeros_like(x))
+    box = lambda x0, y0, h: torch.cat([plane(x0, x0 + 0.4, y0, y0 + 0.4, lambda x, y, z=z: torch.full_like(x, z))  # noqa: E731
+                                       for z in torch.arange(0.2, h + 1e-6, 0.2).tolist()])
+    _, t, at = run([(ground, "road"), (box(4.0, -0.2, 1.6), "pedestrian"), (box(10.0, -0.2, 0.8), "other_obstacle")])
+    r = TC["dynamic_margin"]["pedestrian"]
+    assert t["cost"][at(4.2 + 0.2 + r - 0.3, 0)].item() == terrain.LETHAL   # inside the keep-out disc
+    assert t["cost"][at(4.2 + 0.2 + r + 0.4, 0)].item() < terrain.LETHAL    # beyond it
+    assert t["cost"][at(10.2 + 0.2 + 0.5, 0)].item() < terrain.LETHAL       # a crate gets no margin
+
+
+def test_free_footprint_never_lethal_under_robot():
+    n, res = 50, 0.2
+    nv = {"origin": (-5.0, -5.0), "resolution": res}
+    t = {"cost": torch.full((n, n), terrain.LETHAL, dtype=torch.int8)}
+    terrain.free_footprint(t, nv, (0.0, 0.0), math.pi / 2, 0.495, 0.335)   # facing +y
+    c = t["cost"]
+    at = lambda x, y: int(c[int((x + 5.0) / res), int((y + 5.0) / res)])
+    assert at(0.1, 0.3) == 0 and at(-0.1, -0.3) == 0      # along the (rotated) body
+    assert at(0.4, 0.1) == terrain.LETHAL                 # beyond the half width
+    assert at(0.0, 0.8) == terrain.LETHAL                 # beyond the front

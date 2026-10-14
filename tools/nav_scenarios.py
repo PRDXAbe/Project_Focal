@@ -1,15 +1,19 @@
 """Scripted Nav2 scenarios in the demo world, with pass/fail and safety metrics.
 
 Run while `ros2 launch adaptmap_nav nav.launch.py` is up (ROS sourced):
-  .venv/bin/python tools/nav_scenarios.py [--out docs/nav_results.json]
+  .venv/bin/python tools/nav_scenarios.py [--out docs/nav_results.json] [--repeat 3] [--only NAME]
 
 Each scenario sends a NavigateToPose goal (odom frame = world frame in this sim) and records:
 result, time, distance driven, whether the rover ever left the road (mounted a curb), its minimum
-clearance to static obstacles (footprint vs manifest boxes) and to moving pedestrians.
+clearance (from the rover's footprint outline) to static obstacles (manifest boxes) and to moving
+pedestrians; 0 or less means contact. Contact with a static obstacle, or with a pedestrian while the rover
+is moving, fails the scenario (Gazebo actors walk through a stopped rover; that is reported, not failed).
+Before each scenario the rover is teleported to its start pose (gz set_pose), so scenarios are independent.
 """
 import argparse
 import json
 import math
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -27,16 +31,29 @@ sys.path[:0] = [str(ROOT), str(ROOT / "tools")]
 from synth_scan import MANIFEST, actor_pose  # noqa: E402
 
 ROAD_HALF = 4.0          # road is |y| < 4 m; beyond is the 15 cm curb + sidewalk
-ROBOT_RADIUS = 0.6       # ~ half-diagonal of the 0.99 x 0.67 m footprint
+HALF_L, HALF_W = 0.495, 0.335   # rover footprint 0.99 x 0.67 m
+PED_RADIUS = 0.35
 
-# (name, goal x, goal y, expect success, time limit s, what it tests)
+# (name, start x, y, yaw, goal x, goal y, expect success, time limit s, what it tests)
+# Each scenario starts with the rover placed at its start pose, so one outcome can't affect the next.
 SCENARIOS = [
-    ("pedestrian_crossing", 25.0, -1.0, True, 90, "a pedestrian crosses the road at x = 18 m"),
-    ("around_lane_car", 55.0, 1.5, True, 120, "a parked car blocks the lane at x = 45 m, crates nearby"),
-    ("sidewalk_goal_refused", 65.0, 6.5, False, 60, "goal behind a 15 cm curb: must not climb it"),
-    ("long_route", 110.0, -2.0, True, 200, "55 m past crates and parked cars"),
-    ("u_turn", 90.0, 2.0, True, 90, "turn around inside the 8 m road"),
+    ("pedestrian_crossing", 0.0, -1.0, 0.0, 25.0, -1.0, True, 90, "a pedestrian crosses the road at x = 18 m"),
+    ("around_lane_car", 25.0, -1.0, 0.0, 55.0, 1.5, True, 120, "a parked car blocks the lane at x = 45 m, crates nearby"),
+    ("sidewalk_goal_refused", 55.0, 1.5, 0.0, 65.0, 6.5, False, 60, "goal behind a 15 cm curb: must not climb it"),
+    ("long_route", 55.0, -1.0, 0.0, 110.0, -2.0, True, 200, "55 m past crates and parked cars"),
+    ("u_turn", 110.0, -2.0, 0.0, 90.0, 2.0, True, 90, "turn around inside the 8 m road"),
 ]
+MOVING = 0.05  # m/s: a pedestrian touching a rover slower than this walked into it (sim actors don't avoid)
+
+
+def footprint(x, y, yaw, step=0.05):
+    """Points on the rover's footprint outline (world frame); clearances are measured from these."""
+    nl, nw = int(2 * HALF_L / step) + 1, int(2 * HALF_W / step) + 1
+    ls, ws = np.linspace(-HALF_L, HALF_L, nl), np.linspace(-HALF_W, HALF_W, nw)
+    local = np.concatenate([np.stack([ls, np.full(nl, s * HALF_W)], 1) for s in (-1, 1)] +
+                           [np.stack([np.full(nw, s * HALF_L), ws], 1) for s in (-1, 1)])
+    c, s_ = math.cos(yaw), math.sin(yaw)
+    return [(x + c * a - s_ * b, y + s_ * a + c * b) for a, b in local]
 
 
 def obstacles():
@@ -58,18 +75,31 @@ def box_distance(px, py, o):
 class Runner(Node):
     def __init__(self):
         super().__init__("adaptmap_nav_scenarios")
-        self.pose, self.stamp = None, 0.0
+        self.pose, self.yaw, self.speed, self.stamp = None, 0.0, 0.0, 0.0
         self.create_subscription(Odometry, "/odom", self.on_odom, 10)
         self.client = ActionClient(self, NavigateToPose, "navigate_to_pose")
 
     def on_odom(self, m):
-        p = m.pose.pose.position
+        p, q = m.pose.pose.position, m.pose.pose.orientation
+        self.yaw = math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z))
+        self.speed = math.hypot(m.twist.twist.linear.x, m.twist.twist.linear.y)
         self.pose, self.stamp = (p.x, p.y), m.header.stamp.sec + m.header.stamp.nanosec * 1e-9
 
     def spin_for(self, sec):
         end = time.time() + sec
         while time.time() < end:
             rclpy.spin_once(self, timeout_sec=0.05)
+
+    def place(self, x, y, yaw):
+        """Teleport the rover (Gazebo set_pose) and let it settle and the map refill."""
+        req = (f'name: "rover", position: {{x: {x}, y: {y}, z: 0.05}}, '
+               f'orientation: {{z: {math.sin(yaw / 2)}, w: {math.cos(yaw / 2)}}}')
+        subprocess.run(["gz", "service", "-s", "/world/urban/set_pose", "--reqtype", "gz.msgs.Pose",
+                        "--reptype", "gz.msgs.Boolean", "--timeout", "3000", "--req", req],
+                       check=True, capture_output=True)
+        self.spin_for(3.0)
+        if math.hypot(self.pose[0] - x, self.pose[1] - y) > 0.5:
+            raise RuntimeError(f"rover not at start ({x}, {y}): odometry says {self.pose}")
 
     def run(self, name, gx, gy, expect, limit, stat, acts):
         goal = NavigateToPose.Goal()
@@ -82,8 +112,8 @@ class Runner(Node):
             rclpy.spin_once(self, timeout_sec=0.05)
         handle = fut.result()
         t0, dist, last = time.time(), 0.0, self.pose
-        left_road, min_static, min_ped = False, float("inf"), float("inf")
-        status = GoalStatus.STATUS_REJECTED
+        left_road, min_static, min_ped, ped_speed = False, float("inf"), float("inf"), None
+        status = GoalStatus.STATUS_UNKNOWN  # goal rejected
         if handle.accepted:
             res = handle.get_result_async()
             while not res.done() and time.time() - t0 < limit:
@@ -92,10 +122,16 @@ class Runner(Node):
                 dist += math.hypot(x - last[0], y - last[1])
                 last = (x, y)
                 left_road |= abs(y) > ROAD_HALF
-                min_static = min(min_static, min(box_distance(x, y, o) for o in stat) - ROBOT_RADIUS)
+                near = [o for o in stat if math.hypot(o["pose"][0] - x, o["pose"][1] - y) < 8.0]
+                fp = footprint(x, y, self.yaw) if near or acts else []
+                if near:  # 0 = touching
+                    min_static = min(min_static, min(box_distance(px, py, o) for o in near for px, py in fp))
                 for a in acts:
                     ax, ay, _ = actor_pose(a, self.stamp)
-                    min_ped = min(min_ped, math.hypot(x - ax, y - ay) - ROBOT_RADIUS - 0.35)
+                    if math.hypot(x - ax, y - ay) < 3.0:
+                        d = min(math.hypot(px - ax, py - ay) for px, py in fp) - PED_RADIUS
+                        if d < min_ped:
+                            min_ped, ped_speed = d, self.speed
             if res.done():
                 status = res.result().status
             else:
@@ -104,18 +140,22 @@ class Runner(Node):
                 status = GoalStatus.STATUS_CANCELED
         reached = status == GoalStatus.STATUS_SUCCEEDED
         final_err = math.hypot(self.pose[0] - gx, self.pose[1] - gy)
-        passed = (reached == expect) and not left_road and min_static > 0.0
+        ped_hit = min_ped <= 0.0 and ped_speed > MOVING  # the rover drove into a pedestrian
+        passed = (reached == expect) and not left_road and min_static > 0.0 and not ped_hit
         return {"scenario": name, "goal": [gx, gy], "expected_success": expect, "reached": reached,
                 "status": int(status), "passed": passed, "time_s": round(time.time() - t0, 1),
                 "distance_m": round(dist, 1), "final_error_m": round(final_err, 2), "left_road": left_road,
-                "min_clearance_static_m": round(min_static, 2),
-                "min_clearance_pedestrian_m": None if math.isinf(min_ped) else round(min_ped, 2)}
+                "min_clearance_static_m": None if math.isinf(min_static) else round(min_static, 2),
+                "min_clearance_pedestrian_m": None if math.isinf(min_ped) else round(min_ped, 2),
+                "rover_speed_at_min_pedestrian_m_s": None if ped_speed is None else round(ped_speed, 2),
+                "drove_into_pedestrian": ped_hit}
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(ROOT / "docs" / "nav_results.json"))
     ap.add_argument("--only", help="run only this scenario")
+    ap.add_argument("--repeat", type=int, default=1, help="run the suite this many times (pedestrian timing varies)")
     a = ap.parse_args()
     rclpy.init()
     r = Runner()
@@ -125,15 +165,19 @@ def main():
     r.spin_for(5.0)  # let AdaptMap fill the costmap
     stat, acts = obstacles()
     results = []
-    for name, gx, gy, expect, limit, why in SCENARIOS:
-        if a.only and name != a.only:
-            continue
-        print(f"== {name}: goal ({gx}, {gy}) - {why}", flush=True)
-        res = r.run(name, gx, gy, expect, limit, stat, acts)
-        res["description"] = why
-        results.append(res)
-        print("   " + ("PASS" if res["passed"] else "FAIL") + f"  {json.dumps({k: res[k] for k in ('reached', 'time_s', 'distance_m', 'left_road', 'min_clearance_static_m', 'min_clearance_pedestrian_m')})}", flush=True)
-        r.spin_for(2.0)
+    for run in range(a.repeat):
+        for name, sx, sy, syaw, gx, gy, expect, limit, why in SCENARIOS:
+            if a.only and name != a.only:
+                continue
+            print(f"== run {run + 1}/{a.repeat} {name}: ({sx}, {sy}) -> ({gx}, {gy}) - {why}", flush=True)
+            r.place(sx, sy, syaw)
+            res = r.run(name, gx, gy, expect, limit, stat, acts)
+            res["run"] = run
+            res["start"] = [sx, sy, syaw]
+            res["description"] = why
+            results.append(res)
+            print("   " + ("PASS" if res["passed"] else "FAIL") + f"  {json.dumps({k: res[k] for k in ('reached', 'time_s', 'distance_m', 'left_road', 'min_clearance_static_m', 'min_clearance_pedestrian_m', 'rover_speed_at_min_pedestrian_m_s')})}", flush=True)
+            r.spin_for(2.0)
     Path(a.out).write_text(json.dumps(results, indent=1))
     print(f"{sum(x['passed'] for x in results)}/{len(results)} scenarios passed -> {a.out}")
     r.destroy_node()

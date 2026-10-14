@@ -17,7 +17,11 @@ Weights decay with exp(-dt / tau), where tau is short for dynamic classes
 (vehicles, pedestrians). On top of that, *ray clearing* removes obstacles that the
 current scan sees through: a LiDAR ray that passes inside a cell's stored obstacle
 span (above its bottom, below its top) without ending there is evidence the cell is
-now free. Views also fill small holes between LiDAR rings by interpolation (never
+now free. Likewise a scan that sees only ground in a cell whose stored top is
+well above it (*ground clearing*), e.g. where a pedestrian stood. The reverse, a scan
+whose top is well above the stored top (*appearance*: something walked into the cell),
+replaces the cell instead of being averaged in, so new obstacles show up in one scan.
+Views also fill small holes between LiDAR rings by interpolation (never
 extrapolation), flagged as `filled` with reduced confidence.
 
 The map is rolled (not rebuilt) as the robot moves, in steps of `snap` metres.
@@ -250,6 +254,29 @@ class FoveatedMap:
                 w *= k
                 w[w < f["min_weight"]] = 0.0
 
+    def clear_footprint(self, xy, yaw, half_l, half_w, margin=0.05):
+        """Forget every cell under the robot's footprint: the robot stands there, so whatever the map holds
+        is stale. These cells lie in the LiDAR's blind disc, where neither ray nor ground clearing can see
+        them, so without this a misclassified glimpse of someone passing close (or, in simulation, an actor
+        walking through the stopped robot) stays lethal under the robot and the controller won't move."""
+        c, s = math.cos(yaw), math.sin(yaw)
+        reach = math.hypot(half_l, half_w) + margin
+        xy = torch.as_tensor(xy, dtype=torch.float32, device=self.device)[:2]
+        for l in self.layers:
+            k = int(math.ceil(reach / l.cell)) + 1
+            i0, j0 = torch.floor((xy - self.center_xy + l.half) / l.cell).long().tolist()
+            ii = torch.arange(max(0, i0 - k), min(l.n, i0 + k + 1), device=self.device)
+            jj = torch.arange(max(0, j0 - k), min(l.n, j0 + k + 1), device=self.device)
+            if ii.numel() == 0 or jj.numel() == 0:
+                continue
+            gi, gj = torch.meshgrid(ii, jj, indexing="ij")
+            px = self.center_xy[0] - l.half + (gi + 0.5) * l.cell - xy[0]
+            py = self.center_xy[1] - l.half + (gj + 0.5) * l.cell - xy[1]
+            inside = ((c * px + s * py).abs() <= half_l + margin) & ((-s * px + c * py).abs() <= half_w + margin)
+            gi, gj = gi[inside], gj[inside]
+            l.weight[gi, gj] = 0.0
+            l.ow[gi, gj] = 0.0
+
     def integrate(self, xyz, probs, robot_xy, stamp, origin=None):
         """Fuse one scan. xyz: (N,3) in map frame, probs: (N,C) AdaptMap class probs.
 
@@ -264,6 +291,7 @@ class FoveatedMap:
 
         is_ground = probs[:, self._ground_cls].sum(1) > 0.5
         zone = self.zone_of(xyz[:, :2])
+        self.cleared = 0
         for i, l in enumerate(self.layers):
             m = zone == i
             l.scan_pts = int(m.sum())
@@ -271,7 +299,6 @@ class FoveatedMap:
             if l.scan_pts == 0:
                 continue
             self._fuse(l, self._cell_index(l, xyz[m, :2]), xyz[m, 2], probs[m], is_ground[m], stamp)
-        self.cleared = 0
         if origin is not None and self.fusion.get("ray_clearing", False):
             self._clear_rays(torch.as_tensor(origin, dtype=torch.float32, device=self.device), xyz)
 
@@ -295,6 +322,31 @@ class FoveatedMap:
         n_o = cnt[o]
         w_old = l.weight.view(-1)[o]
         a = w_old / (w_old + 1.0)  # old share; each scan is one unit-weight observation
+
+        # ground clearing: a scan that sees only ground in a cell whose stored top is well above it
+        # contradicts the stored obstacle (e.g. the trail a pedestrian leaves on the road). Discount the
+        # obstacle evidence like ray clearing; once it is gone, the scan replaces the stale heights
+        # instead of being averaged in (~1/max_weight per scan would leave a lethal residue for seconds).
+        ow = l.ow.view(-1)
+        contra = (gcnt[o] == n_o) & (ow[o] > 0) & \
+            (l.zmax.view(-1)[o] > zmax[o] + self.fusion.get("ground_clear_step", 0.1))
+        if contra.any():
+            c = o[contra]
+            ow[c] *= self.fusion.get("clear_factor", 0.5)
+            gone = torch.zeros_like(contra)
+            gone[contra] = ow[c] < self.fusion["min_weight"]
+            ow[o[gone]] = 0.0
+            a = torch.where(gone, torch.zeros_like(a), a)
+            self.cleared += int(gone.sum())
+        # obstacle appearance, the mirror of ground clearing: a scan whose non-ground top is well above the
+        # stored top (something walked or drove into the cell) replaces the cell instead of being averaged
+        # in at ~1/max_weight per scan, which put a crossing pedestrian's front edge ~1 m behind the person
+        fresh = (gcnt[o] < n_o) & (w_old > 0) & \
+            (zmax[o] > l.zmax.view(-1)[o] + self.fusion.get("appear_step", 0.1))
+        if fresh.any():
+            a = torch.where(fresh, torch.zeros_like(a), a)
+            w_old = torch.where(fresh, torch.zeros_like(w_old), w_old)
+            ow[o[fresh]] = 0.0
         b = 1.0 - a
 
         def blend(field, new, at=o, aa=a, bb=b):

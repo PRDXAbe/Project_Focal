@@ -17,6 +17,14 @@ from .foveated_map import _box
 LETHAL, UNKNOWN = 100, -1
 
 
+def _disc_dilate(mask, r):
+    """Cells within r cells (Euclidean) of any True cell."""
+    k = int(math.ceil(r))
+    d = torch.arange(-k, k + 1, device=mask.device, dtype=torch.float32)
+    disc = ((d[:, None] ** 2 + d[None, :] ** 2) <= r * r).float()
+    return F.conv2d(mask.float()[None, None], disc[None, None], padding=k)[0, 0] > 0
+
+
 def _masked_mean(x, valid, k):
     s = _box(torch.where(valid, x, 0.0), k)
     n = _box(valid.float(), k)
@@ -33,6 +41,7 @@ def _nan_pool(x, k, sign):
 
 def analyze(nv, cfg):
     """Return dict of (n, n) tensors: slope_deg, step, roughness, curb (bool), passable_under (bool),
+    obstacle (bool), dynamic (bool: moving-class cells, input to motion.MotionPredictor),
     cost (int8, OccupancyGrid convention). cfg = config['terrain']."""
     res = nv["resolution"]
     elev, ground, hag, clear = nv["elevation"], nv["ground"], nv["hag"], nv["clearance"]
@@ -86,7 +95,37 @@ def analyze(nv, cfg):
         (torch.nan_to_num(step, nan=0.0) > cfg.get("max_step", 0.12))
     if cfg.get("curb_lethal", True):
         lethal |= curb
+    # class-aware keep-out: people move, and the map reaches the planner ~0.5 s late, so a cell that is a
+    # standing pedestrian blocks a disc around it (walking distance during that delay + personal space)
+    dynamic = torch.zeros_like(obstacle)
+    for name, radius in cfg.get("dynamic_margin", {}).items():
+        person = obstacle & (cls == names.index(name)) & (hag > cfg.get("dynamic_min_height", 0.5))
+        if person.any():
+            lethal |= _disc_dilate(person, radius / res)
+            dynamic |= person
     cost = torch.where(lethal, torch.full_like(cost, LETHAL), cost)
     cost = torch.where(known, cost.round(), torch.full_like(cost, UNKNOWN)).to(torch.int8)
     return {"slope_deg": slope, "step": step, "roughness": rough, "curb": curb,
-            "passable_under": passable_under, "obstacle": obstacle, "cost": cost}
+            "passable_under": passable_under, "obstacle": obstacle, "dynamic": dynamic,
+            "cost": cost}
+
+
+def free_footprint(t, nv, xy, yaw, half_l, half_w):
+    """The robot stands on these cells, so they are never lethal in the published costmap. Keep-out discs,
+    predicted corridors and step checks reach into neighbouring cells; if they cover the robot, Nav2's
+    controller and its recoveries (backup, spin) all see a collision at the current pose and deadlock."""
+    cost, res = t["cost"], nv["resolution"]
+    n = cost.shape[0]
+    ix = torch.arange(n, device=cost.device, dtype=torch.float32)
+    px = (nv["origin"][0] + (ix + 0.5) * res - xy[0])[:, None]
+    py = (nv["origin"][1] + (ix + 0.5) * res - xy[1])[None, :]
+    c, s = math.cos(yaw), math.sin(yaw)
+    inside = ((c * px + s * py).abs() <= half_l) & ((-s * px + c * py).abs() <= half_w)
+    cost[inside & (cost == LETHAL)] = 0
+    return t
+
+
+def add_lethal(t, mask):
+    """Mark extra cells lethal (e.g. MotionPredictor corridors), in place on analyze()'s output."""
+    t["cost"][mask] = LETHAL
+    return t

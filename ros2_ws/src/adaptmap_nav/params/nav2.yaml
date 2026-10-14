@@ -65,7 +65,7 @@ controller_server:
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
-    failure_tolerance: 0.5
+    failure_tolerance: 5.0       # s: wait out a crossing pedestrian instead of falling into recoveries
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["general_goal_checker"]
     controller_plugins: ["FollowPath"]
@@ -137,9 +137,9 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: odom
       robot_base_frame: base_link
-      rolling_window: true          # AdaptMap is a robot-centred local map (+-50 m)
-      width: 96
-      height: 96
+      rolling_window: true          # AdaptMap is a robot-centred local map (+-50 m); beyond it the window is
+      width: 160                    # unknown, so goals up to 80 m away can still be planned towards
+      height: 160
       resolution: 0.2
       footprint: "[[0.5, 0.35], [0.5, -0.35], [-0.5, -0.35], [-0.5, 0.35]]"
       trinary_costmap: false

@@ -125,17 +125,37 @@ def main():
 
     nav = load("nav_results.json")
     if nav:
+        names = list(dict.fromkeys(r["scenario"] for r in nav))
+        runs = max(r.get("run", 0) for r in nav) + 1
         ok = sum(r["passed"] for r in nav)
         L += ["## Autonomous navigation (Nav2 on the AdaptMap costmap)", "",
-              f"**{ok}/{len(nav)} scenarios passed** (`tools/nav_scenarios.py`). Pass = expected outcome, never left the road "
-              "(no curb climbing) and positive clearance to every static obstacle.", "",
-              "| Scenario | Expected | Reached | Pass | Time | Distance | Min clearance (static) | Min distance to pedestrians |",
+              f"**{ok}/{len(nav)} scenario runs passed** ({len(names)} scenarios × {runs} runs, `tools/nav_scenarios.py "
+              f"--repeat {runs}`; the rover is teleported to each scenario's start, pedestrian timing differs per run). "
+              "Pass = expected outcome (reach the goal, or refuse a goal behind a curb), never left the road, no "
+              "contact with a static obstacle, and no contact with a pedestrian while moving. Clearances are from "
+              "the rover's footprint outline; the worst run is shown.", "",
+              "| Scenario | Expected | Passed | Time (median) | Distance (median) | Min clearance (static) | "
+              "Min distance to pedestrians | Rover speed there |",
               "|---|---|---|---|---|---|---|---|"]
-        for r in nav:
-            ped = "–" if r["min_clearance_pedestrian_m"] is None else f"{r['min_clearance_pedestrian_m']:.2f} m"
-            L.append(f"| {r['scenario'].replace('_', ' ')} | {'reach' if r['expected_success'] else 'refuse'} | "
-                     f"{'yes' if r['reached'] else 'no'} | {'✅' if r['passed'] else '❌'} | {r['time_s']} s | {r['distance_m']} m | "
-                     f"{r['min_clearance_static_m']:.2f} m | {ped} |")
+        med = lambda v: sorted(v)[len(v) // 2]
+        for n in names:
+            rs = [r for r in nav if r["scenario"] == n]
+            peds = [r for r in rs if r["min_clearance_pedestrian_m"] is not None]
+            worst = min(peds, key=lambda r: r["min_clearance_pedestrian_m"]) if peds else None
+            ped = "–" if worst is None else f"{worst['min_clearance_pedestrian_m']:.2f} m"
+            if worst is not None and worst["min_clearance_pedestrian_m"] <= 0 and not worst["drove_into_pedestrian"]:
+                ped += " ¹"
+            spd = "–" if worst is None else f"{worst['rover_speed_at_min_pedestrian_m_s']:.2f} m/s"
+            L.append(f"| {n.replace('_', ' ')} | {'reach' if rs[0]['expected_success'] else 'refuse'} | "
+                     f"{sum(r['passed'] for r in rs)}/{len(rs)} {'✅' if all(r['passed'] for r in rs) else '❌'} | "
+                     f"{med([r['time_s'] for r in rs])} s | {med([r['distance_m'] for r in rs])} m | "
+                     f"{min(r['min_clearance_static_m'] for r in rs):.2f} m | {ped} | {spd} |")
+        if any(r["min_clearance_pedestrian_m"] is not None and r["min_clearance_pedestrian_m"] <= 0
+               and not r["drove_into_pedestrian"] for r in nav):
+            L += ["", "¹ Contact while the rover was stopped: it yielded, but stopped with its body on the crossing "
+                  "line, and the simulated pedestrian (a Gazebo actor, which never avoids anything) walked into it. "
+                  "The rover was never moving while in contact. Stopping *before* a crossing instead of "
+                  "on it is a known limitation."]
         L.append("")
 
     (D / "RESULTS.md").write_text("\n".join(L))

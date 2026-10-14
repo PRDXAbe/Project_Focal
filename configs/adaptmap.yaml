@@ -39,6 +39,8 @@ fusion:
   clear_end_margin: 0.3   # ignore samples this close to the ray's end point (m)
   clear_min_hits: 1
   clear_factor: 0.5       # weight multiplier per scan for contradicted cells
+  ground_clear_step: 0.1  # a ground-only scan this far (m) below a cell's stored top also contradicts it
+  appear_step: 0.1        # a scan whose top is this far (m) above the stored top replaces the cell (new obstacle)
 
 # Speed-adaptive foveation (adaptmap/adaptive.py): the 5 cm zone grows with reaction + braking distance
 adaptive_zones:
@@ -54,6 +56,7 @@ terrain:
   costmap_cell: 0.2       # navigation grid resolution (m)
   costmap_half: 50.0      # navigation grid half-size (m)
   robot_height: 1.0       # can drive under overhangs with more clearance than this (m)
+  robot_half_size: [0.495, 0.335]  # footprint half length/width (m); map cells under it are cleared each scan
   max_step: 0.12          # highest step the wheels can climb (m); 0.15 m curbs are not climbable
   max_slope_deg: 20.0
   curb_min: 0.05          # a road<->sidewalk height jump in this range is a curb (m)
@@ -67,6 +70,18 @@ terrain:
   rough_cost: 20
   filled_cost: 10         # interpolated (hole-filled) cells are less certain
   class_cost: {road: 0, sidewalk_curb: 30, terrain: 20, vegetation: 60, unknown: 50}
+  dynamic_margin: {pedestrian: 1.0}  # lethal keep-out radius (m) around these classes (they move; map lags)
+  dynamic_min_height: 0.5 # only cells standing this tall count (a person), not low misclassified clutter
+  motion:                 # predicted keep-out: corridor each tracked moving blob sweeps (adaptmap/motion.py)
+    enabled: true
+    horizon: 2.5          # s of predicted walking marked lethal (speed is underestimated ~30 %)
+    radius: 0.6           # corridor half-width (m)
+    min_speed: 0.3        # m/s; slower blobs count as standing (static keep-out only)
+    window: 1.0           # s of centroid history; velocity = net displacement over it
+    min_span: 0.6         # s of history before a track can count as moving
+    min_straight: 0.7     # net / travelled distance; centroids that jitter (static objects) stay below
+    gate: 0.5             # m association distance (+ max_speed * dt)
+    max_age: 1.0          # s a track survives unseen
 
 model:
   backend: mmdet3d_minkunet   # mmdet3d_minkunet | geometric
