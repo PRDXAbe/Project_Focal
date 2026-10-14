@@ -9,6 +9,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source /opt/ros/humble/setup.bash
 source "$ROOT/ros2_ws/install/setup.bash"
 export ADAPTMAP_ROOT="$ROOT" QT_QPA_PLATFORM=xcb
+# Laptop with hybrid graphics: render Gazebo and the viewer on the NVIDIA GPU (PRIME offload) instead of the
+# integrated one, and cap CPU math libraries at 2 threads; the viewer otherwise takes 7+ cores and starves the
+# mapping node. Override any of these by setting them before running the script.
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-2}"
+export __NV_PRIME_RENDER_OFFLOAD="${__NV_PRIME_RENDER_OFFLOAD:-1}"
+export __GLX_VENDOR_LIBRARY_NAME="${__GLX_VENDOR_LIBRARY_NAME:-nvidia}"
 LOG="$ROOT/data/manual_$(date +%Y%m%d_%H%M%S)"; mkdir -p "$LOG"
 
 ros2 launch adaptmap_ros adaptmap.launch.py drive:=false stats_log:="$LOG/stats.jsonl" > "$LOG/launch.log" 2>&1 &
