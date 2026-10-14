@@ -1,7 +1,9 @@
 """Scripted Nav2 scenarios in the demo world, with pass/fail and safety metrics.
 
-Run while `ros2 launch adaptmap_nav nav.launch.py` is up (ROS sourced):
-  .venv/bin/python tools/nav_scenarios.py [--out docs/nav_results.json] [--repeat 3] [--only NAME]
+Run while `ros2 launch adaptmap_nav nav.launch.py [world:=tierN.sdf]` is up (ROS sourced):
+  .venv/bin/python tools/nav_scenarios.py [--world tierN] [--out FILE] [--repeat 3] [--only NAME]
+The demo world uses the built-in SCENARIOS below (-> docs/nav_results.json); the tier worlds
+(tools/make_tier_worlds.py) carry their own scenarios in their manifest (-> docs/nav_tierN.json).
 
 Each scenario sends a NavigateToPose goal (odom frame = world frame in this sim) and records:
 result, time, distance driven, whether the rover ever left the road (mounted a curb), its minimum
@@ -28,9 +30,11 @@ from rclpy.node import Node
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path[:0] = [str(ROOT), str(ROOT / "tools")]
-from synth_scan import MANIFEST, actor_pose  # noqa: E402
+from synth_scan import actor_pose  # noqa: E402
 
-ROAD_HALF = 4.0          # road is |y| < 4 m; beyond is the 15 cm curb + sidewalk
+WORLDS = ROOT / "ros2_ws" / "src" / "adaptmap_sim" / "worlds"
+ROAD_HALF = 4.0          # road is |y| < 4 m; beyond is the 15 cm curb + sidewalk (tier manifests set their own)
+ROBOT_TOP = 1.8          # LiDAR on its mast: overhangs below this would hit the real robot
 HALF_L, HALF_W = 0.495, 0.335   # rover footprint 0.99 x 0.67 m
 PED_RADIUS = 0.35
 
@@ -56,16 +60,22 @@ def footprint(x, y, yaw, step=0.05):
     return [(x + c * a - s_ * b, y + s_ * a + c * b) for a, b in local]
 
 
-def obstacles():
-    """Static obstacle footprints from the manifest (non-ground classes): centre, half size, yaw."""
-    objs = json.loads(MANIFEST.read_text())["objects"]
-    stat = [o for o in objs if o["type"] != "actor" and o["class"] not in ("road", "sidewalk_curb", "terrain")]
+def obstacles(manifest, robot_top=ROBOT_TOP):
+    """Static obstacles the robot can touch (non-ground classes, bottom below the robot's top), and actors."""
+    objs = manifest["objects"]
+    stat = [o for o in objs if o["type"] != "actor" and o["class"] not in ("road", "sidewalk_curb", "terrain")
+            and o["pose"][2] - o["size"][2] / 2 < robot_top]
+    for o in stat:
+        o["reach"] = math.hypot(o["size"][0], o["size"][1]) / 2   # centre-to-corner, for the proximity filter
     acts = [o for o in objs if o["type"] == "actor"]
     return stat, acts
 
 
 def box_distance(px, py, o):
+    """Distance from a point to an object's footprint (cylinders and spheres as circles, boxes as rectangles)."""
     x, y, _, yaw = o["pose"]
+    if o["type"] in ("cylinder", "sphere"):
+        return max(math.hypot(px - x, py - y) - o["size"][0] / 2, 0.0)
     hx, hy = o["size"][0] / 2, o["size"][1] / 2
     c, s = math.cos(yaw), math.sin(yaw)
     lx, ly = c * (px - x) + s * (py - y), -s * (px - x) + c * (py - y)
@@ -101,7 +111,7 @@ class Runner(Node):
         if math.hypot(self.pose[0] - x, self.pose[1] - y) > 0.5:
             raise RuntimeError(f"rover not at start ({x}, {y}): odometry says {self.pose}")
 
-    def run(self, name, gx, gy, expect, limit, stat, acts):
+    def run(self, name, gx, gy, expect, limit, stat, acts, road_half=ROAD_HALF):
         goal = NavigateToPose.Goal()
         goal.pose.header.frame_id = "odom"
         goal.pose.header.stamp = self.get_clock().now().to_msg()
@@ -113,6 +123,8 @@ class Runner(Node):
         handle = fut.result()
         t0, dist, last = time.time(), 0.0, self.pose
         left_road, min_static, min_ped, ped_speed = False, float("inf"), float("inf"), None
+        static_name = ped_name = None
+        track, last_track = [], -1.0
         status = GoalStatus.STATUS_UNKNOWN  # goal rejected
         if handle.accepted:
             res = handle.get_result_async()
@@ -121,17 +133,22 @@ class Runner(Node):
                 x, y = self.pose
                 dist += math.hypot(x - last[0], y - last[1])
                 last = (x, y)
-                left_road |= abs(y) > ROAD_HALF
-                near = [o for o in stat if math.hypot(o["pose"][0] - x, o["pose"][1] - y) < 8.0]
+                left_road |= abs(y) > road_half
+                if time.time() - last_track >= 0.5:
+                    track.append([round(self.stamp, 1), round(x, 2), round(y, 2), round(self.speed, 2)])
+                    last_track = time.time()
+                near = [o for o in stat if math.hypot(o["pose"][0] - x, o["pose"][1] - y) - o["reach"] < 8.0]
                 fp = footprint(x, y, self.yaw) if near or acts else []
-                if near:  # 0 = touching
-                    min_static = min(min_static, min(box_distance(px, py, o) for o in near for px, py in fp))
+                for o in near:  # 0 = touching
+                    d = min(box_distance(px, py, o) for px, py in fp)
+                    if d < min_static:
+                        min_static, static_name = d, o["name"]
                 for a in acts:
                     ax, ay, _ = actor_pose(a, self.stamp)
                     if math.hypot(x - ax, y - ay) < 3.0:
                         d = min(math.hypot(px - ax, py - ay) for px, py in fp) - PED_RADIUS
                         if d < min_ped:
-                            min_ped, ped_speed = d, self.speed
+                            min_ped, ped_speed, ped_name = d, self.speed, a["name"]
             if res.done():
                 status = res.result().status
             else:
@@ -148,12 +165,14 @@ class Runner(Node):
                 "min_clearance_static_m": None if math.isinf(min_static) else round(min_static, 2),
                 "min_clearance_pedestrian_m": None if math.isinf(min_ped) else round(min_ped, 2),
                 "rover_speed_at_min_pedestrian_m_s": None if ped_speed is None else round(ped_speed, 2),
-                "drove_into_pedestrian": ped_hit}
+                "drove_into_pedestrian": ped_hit, "closest_static": static_name, "closest_pedestrian": ped_name,
+                "track": track}
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(ROOT / "docs" / "nav_results.json"))
+    ap.add_argument("--world", default="urban", help="urban (demo world, built-in scenarios) or tier1 ... tier5")
+    ap.add_argument("--out", help="default docs/nav_results.json (urban) or docs/nav_<world>.json")
     ap.add_argument("--only", help="run only this scenario")
     ap.add_argument("--repeat", type=int, default=1, help="run the suite this many times (pedestrian timing varies)")
     a = ap.parse_args()
@@ -163,23 +182,28 @@ def main():
     while not r.client.wait_for_server(timeout_sec=2.0) or r.pose is None:
         rclpy.spin_once(r, timeout_sec=0.1)
     r.spin_for(5.0)  # let AdaptMap fill the costmap
-    stat, acts = obstacles()
+    manifest = json.loads((WORLDS / f"{a.world}_manifest.json").read_text())
+    stat, acts = obstacles(manifest, manifest.get("robot_top", ROBOT_TOP))
+    road_half = manifest.get("road_half", ROAD_HALF)
+    scenarios = [(c["name"], *map(float, c["start"]), *map(float, c["goal"]), c["expect"] == "reach", c["limit"],
+                  c["what"]) for c in manifest["scenarios"]] if "scenarios" in manifest else SCENARIOS
+    out = a.out or str(ROOT / "docs" / ("nav_results.json" if a.world == "urban" else f"nav_{a.world}.json"))
     results = []
     for run in range(a.repeat):
-        for name, sx, sy, syaw, gx, gy, expect, limit, why in SCENARIOS:
+        for name, sx, sy, syaw, gx, gy, expect, limit, why in scenarios:
             if a.only and name != a.only:
                 continue
             print(f"== run {run + 1}/{a.repeat} {name}: ({sx}, {sy}) -> ({gx}, {gy}) - {why}", flush=True)
             r.place(sx, sy, syaw)
-            res = r.run(name, gx, gy, expect, limit, stat, acts)
-            res["run"] = run
+            res = r.run(name, gx, gy, expect, limit, stat, acts, road_half)
+            res["run"], res["world"] = run, a.world
             res["start"] = [sx, sy, syaw]
             res["description"] = why
             results.append(res)
             print("   " + ("PASS" if res["passed"] else "FAIL") + f"  {json.dumps({k: res[k] for k in ('reached', 'time_s', 'distance_m', 'left_road', 'min_clearance_static_m', 'min_clearance_pedestrian_m', 'rover_speed_at_min_pedestrian_m_s')})}", flush=True)
             r.spin_for(2.0)
-    Path(a.out).write_text(json.dumps(results, indent=1))
-    print(f"{sum(x['passed'] for x in results)}/{len(results)} scenarios passed -> {a.out}")
+    Path(out).write_text(json.dumps(results, indent=1))
+    print(f"{sum(x['passed'] for x in results)}/{len(results)} scenarios passed -> {out}")
     r.destroy_node()
     rclpy.try_shutdown()
 

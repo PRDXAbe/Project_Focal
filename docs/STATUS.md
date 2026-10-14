@@ -33,6 +33,37 @@ separately.
 | Housekeeping | Reviewed `data/demo_*`; five unused runs deleted 2026-10-14 (user OK). Kept `data/demo_20261010_212110/bag` (demo-world evaluation set) and `data/demo_20261012_222528` (source of `docs/live_summary.json`) | |
 | P5 | Nav2 on the AdaptMap costmap (SmacPlanner2D + RegulatedPurePursuit), 5 scripted scenarios run 3× each. New method parts: *appearance* (a new obstacle replaces a cell in one scan instead of being averaged in over ~1 s), ground clearing, 1 m pedestrian keep-out, **motion-aware keep-out** (`adaptmap/motion.py`: pedestrian tracks → lethal corridor of the next 2.5 s, measured from the blob's front edge), footprint clearing (map + published costmap never lethal under the rover), costmap every scan | **15/15 runs pass** (`docs/nav_results.json`); 31 tests. Video `docs/figures/nav_demo.mp4` (local, choppy 1.3 fps: sim + renderer share the GPU; re-record with `--top` if needed). Known limitation: the rover sometimes yields *on* the crossing line instead of before it; a Gazebo actor then walks into the stopped rover (footnote in RESULTS) |
 
+### ⏸ Paused 2026-10-14: tier test campaign in progress (tooling committed; only the v3 config switch is uncommitted)
+Goal (user): 5 test worlds of rising difficulty, then severe test cases on each, to find where the robot
+shines and where it fails; afterwards a judge-friendly UI.
+- **Done (committed):**
+  - `tools/make_tier_worlds.py`: tier1 open road, tier2 parked street, tier3 pedestrian zone, tier4
+    obstacle course, tier5 chaos. It writes `worlds/tierN.sdf` + a manifest holding the scenarios
+    (30 in total); the geometry of all 30 was checked (start free, path exists / doesn't for refuse).
+  - `tools/make_world.py`: `write()` refactor, actor `waits` (demo world output byte-identical).
+  - `tools/nav_scenarios.py`:
+    - `--world tierN`, per-world road width;
+    - height-aware contact (overhangs below the 1.8 m mast count), cylinders as circles;
+    - proximity by nearest edge;
+    - records the closest obstacle/pedestrian name and a 2 Hz `track`.
+  - `tools/run_tier_suite.sh REPEAT TIERS...`: launch → scenarios → stop per world; retries when
+    Nav2's lifecycle bring-up stalls (seen once: stuck configuring behavior_server).
+- **Finding 1 (fixed by switching model):** tier1 "straight" froze next to a parked car. v2 labels a
+  car's side as *road* when the robot is right beside it (30 % of its points), learned from the old
+  corrupted labels. Road is ground, so a fake slope/step ring made the lane lethal. v3 labels it 100 %
+  vehicle; with v3 tier1 is 5/5 (v2: 4/5). **`configs/adaptmap.yaml` now points at
+  `minkunet_adapt10_v3.pth` (uncommitted).** Before committing: re-run the demo suite with v3
+  (`nav_scenarios.py --repeat 3`, was 15/15 with v2) and update RESULTS/STATUS/CLAUDE.md to say v3
+  is the default.
+- **Next:**
+  1. Setup pass on tiers 2–5: `bash tools/run_tier_suite.sh 1 2 3 4 5` (~25 min).
+  2. Fix setup problems, then the severe campaign: `bash tools/run_tier_suite.sh 3` (all tiers × 3,
+     ~1.5 h).
+  3. Long soak run (item 3).
+  4. Add a tier section to `make_results.py`, then commit the results and the config switch.
+- **Expected failure to confirm:** tier4 `overhang_low`. Config `terrain.robot_height` is 1.0 m but the
+  LiDAR mast is 1.73–1.8 m, so the map calls a 1.3 m bar passable.
+
 ### Not done ⬜ (next steps, in order)
 1. **Real-data accuracy (optional).** Fine-tune on mixed sim + SemanticPOSS sequences 00–04,
    with intensity dropout/augmentation, testing on 05. This would give one model for both sim and
@@ -49,10 +80,11 @@ separately.
 ## Where things are
 | Thing | Location |
 |---|---|
-| Models | `checkpoints/minkunet.pth` (pretrained, real data), `minkunet_adapt10.pth` = `_v2.pth` (sim default), `_v1.pth` (6 worlds, no distillation), `_v3.pth` (v2 recipe on corrected labels, slightly better mIoU, not default); training logs `data/finetune*.log` |
+| Models | `checkpoints/minkunet.pth` (pretrained, real data); `minkunet_adapt10_v1.pth` (6 worlds), `_v2.pth` (12 worlds + distillation), `_v3.pth` (v2 recipe on corrected labels; **config default since 2026-10-14, uncommitted**), `minkunet_adapt10.pth` = copy of v2. Training logs `data/finetune_model_v{1,2,3}.log`, histories `checkpoints/minkunet_adapt10_v*.json` |
 | Sim training data | `data/sim_adapt/sequences/urban_s{11..16,31..36}` (4,139 scans, 11 GB), test `data/sim_adapt_test/sequences/urban_s21` (245) |
 | Real data | `data/real/kitti_raw/2011_09_26/...drive_0005_sync`, `data/real/semanticposs/dataset` |
 | Demo-world eval bag | `data/demo_20261010_212110/bag` |
+| Other local data | `data/demo_20261012_222528` (source of `docs/live_summary.json`), `data/coreonly` (mapping core alone, 9.3 scans/s), `data/live` (demo videos); `data/tiers_<date>/` = logs of `tools/run_tier_suite.sh` |
 | Result JSONs | `docs/*.json` → `python3 tools/make_results.py` → `docs/RESULTS.md` |
 | Plan file | `~/.claude/plans/lorenzini-sih-ppt-pdf-ok-refactored-plum.md` |
 

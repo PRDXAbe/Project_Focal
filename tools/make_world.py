@@ -63,17 +63,21 @@ def car(name, x, y, yaw, kind):
       <pose>{x} {y} 0 0 0 {yaw}</pose></include>""")
 
 
-def actor(name, waypoints, speed=1.2):
-    """Walking pedestrian looping through waypoints (closed loop) at constant speed.
+def actor(name, waypoints, speed=1.2, waits=None):
+    """Walking pedestrian looping through waypoints (closed loop) at constant speed; `waits` maps a
+    waypoint index to seconds the pedestrian stands still there before walking on.
 
     Gazebo moves actors along a spline through the waypoints; with only the corners given it speeds up
     and slows down (up to ~2.5 m off a constant-speed walk), so waypoints are placed ~1 s apart along
     each leg. The manifest trajectory then matches the simulated actor (`synth_scan.actor_pose`)."""
     pts = waypoints + [waypoints[0]]
     t, traj = 0.0, []
-    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+    for i, ((x0, y0), (x1, y1)) in enumerate(zip(pts, pts[1:])):
         seg = math.hypot(x1 - x0, y1 - y0)
         yaw = math.atan2(y1 - y0, x1 - x0)
+        if waits and waits.get(i):
+            traj.append((round(t, 3), x0, y0, yaw))
+            t += waits[i]
         n = max(1, math.ceil(seg / speed))
         for k in range(n):
             a = k / n
@@ -96,6 +100,33 @@ DRIVE_Y = -1.0  # scripted laps drive along this line; training worlds keep obst
 def off_line_y(rnd):
     """A y on the road that keeps a 0.8 m obstacle clear of the rover's drive line."""
     return rnd.choice([rnd.uniform(0.6, 3.3), rnd.uniform(-3.5, -2.6)])
+
+
+def write(name, meta, start=(0, -1.0, 0)):
+    """Write worlds/<name>.sdf (world name stays "urban": tools address /world/urban/...) and its manifest."""
+    world = f"""<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="urban">
+    <physics name="1ms" type="ignored"><max_step_size>0.004</max_step_size><real_time_factor>1.0</real_time_factor></physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors"><render_engine>ogre2</render_engine></plugin>
+    <scene><ambient>0.6 0.6 0.6 1</ambient><background>0.7 0.8 0.9 1</background><shadows>false</shadows></scene>
+    <light type="directional" name="sun"><cast_shadows>false</cast_shadows><pose>0 0 50 0 0 0</pose>
+      <diffuse>0.9 0.9 0.9 1</diffuse><direction>-0.4 0.2 -0.9</direction></light>
+    <model name="ground"><static>true</static>
+      <link name="l"><collision name="c"><geometry><plane><normal>0 0 1</normal><size>400 400</size></plane></geometry></collision>
+      <visual name="v"><geometry><plane><normal>0 0 1</normal><size>400 400</size></plane></geometry>{mat(0.45, 0.6, 0.3)}</visual></link></model>
+    <include><uri>model://rover</uri><name>rover</name><pose>{start[0]} {start[1]} 0.02 0 0 {start[2]}</pose></include>
+    {''.join(sdf)}
+  </world>
+</sdf>
+"""
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / f"{name}.sdf").write_text(world)
+    (OUT / f"{name}_manifest.json").write_text(json.dumps({"objects": objs, "ground_class": "terrain", **meta}, indent=1))
+    print(f"wrote {OUT / (name + '.sdf')} with {len(objs)} labelled objects")
 
 
 def build(seed=None):
@@ -174,30 +205,7 @@ def build(seed=None):
                 x0 = rnd.uniform(10, 110)
                 actor(f"ped_{k}", [(x0, -7.0), (x0 + rnd.uniform(-3, 3), 7.0)], speed=rnd.uniform(0.8, 1.4))
 
-    world = f"""<?xml version="1.0"?>
-<sdf version="1.9">
-  <world name="urban">
-    <physics name="1ms" type="ignored"><max_step_size>0.004</max_step_size><real_time_factor>1.0</real_time_factor></physics>
-    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
-    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
-    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
-    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors"><render_engine>ogre2</render_engine></plugin>
-    <scene><ambient>0.6 0.6 0.6 1</ambient><background>0.7 0.8 0.9 1</background><shadows>false</shadows></scene>
-    <light type="directional" name="sun"><cast_shadows>false</cast_shadows><pose>0 0 50 0 0 0</pose>
-      <diffuse>0.9 0.9 0.9 1</diffuse><direction>-0.4 0.2 -0.9</direction></light>
-    <model name="ground"><static>true</static>
-      <link name="l"><collision name="c"><geometry><plane><normal>0 0 1</normal><size>400 400</size></plane></geometry></collision>
-      <visual name="v"><geometry><plane><normal>0 0 1</normal><size>400 400</size></plane></geometry>{mat(0.45, 0.6, 0.3)}</visual></link></model>
-    <include><uri>model://rover</uri><name>rover</name><pose>0 -1.0 0.02 0 0 0</pose></include>
-    {''.join(sdf)}
-  </world>
-</sdf>
-"""
-    OUT.mkdir(parents=True, exist_ok=True)
-    name = "urban" if seed is None else f"urban_s{seed}"
-    (OUT / f"{name}.sdf").write_text(world)
-    (OUT / f"{name}_manifest.json").write_text(json.dumps({"objects": objs, "ground_class": "terrain", "seed": seed}, indent=1))
-    print(f"wrote {OUT / (name + '.sdf')} with {len(objs)} labelled objects")
+    write("urban" if seed is None else f"urban_s{seed}", {"seed": seed})
 
 
 if __name__ == "__main__":
