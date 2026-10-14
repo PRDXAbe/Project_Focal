@@ -30,6 +30,7 @@ separately.
 | P8 (part) | CI (GitHub Actions, CPU pytest), launch_testing smoke test (3/3 pass), `make_results.py`, README/METHOD/TESTING updates | |
 | P4 follow-up | "v2 only 46 % on world-21 vehicles" was a **label bug**: `tools/fix_labels.py` relabelled whole car sides as road wherever no ground was visible within 1 m (next to the robot, inside the LiDAR blind disc; `gz = inf` made every point "low"). Fixed with a test, labels regenerated from `labels_raw` for s11–s16 and s21 (≈80 % fewer relabelled points; the rest are at ground level). New `tools/eval_sim_test.py` → `docs/eval_world21.json` (all 245 scans) | world 21: v2 **88.4** mIoU, vehicle **93 %** (was reported 73.8 / 46 %); v1 79.0 / 48 % (it was trained only on the corrupted worlds). v2 is best on both held-out worlds |
 | v3 retrain | v2 recipe on the corrected labels (`checkpoints/minkunet_adapt10_v3.pth`, log `data/finetune_model_v3.log`). `tools/finetune.py` now starts from `model_real` (it crashed starting from the 10-class default) | world 21 **89.6** (v2 88.4), demo world 90.4 (v2 90.2), but demo pedestrians 78 vs 80 %: **v2 stays the default** (navigation validated with it) |
+| Housekeeping | Reviewed `data/demo_*`; five unused runs deleted 2026-10-14 (user OK). Kept `data/demo_20261010_212110/bag` (demo-world evaluation set) and `data/demo_20261012_222528` (source of `docs/live_summary.json`) | |
 | P5 | Nav2 on the AdaptMap costmap (SmacPlanner2D + RegulatedPurePursuit), 5 scripted scenarios run 3× each. New method parts: *appearance* (a new obstacle replaces a cell in one scan instead of being averaged in over ~1 s), ground clearing, 1 m pedestrian keep-out, **motion-aware keep-out** (`adaptmap/motion.py`: pedestrian tracks → lethal corridor of the next 2.5 s, measured from the blob's front edge), footprint clearing (map + published costmap never lethal under the rover), costmap every scan | **15/15 runs pass** (`docs/nav_results.json`); 31 tests. Video `docs/figures/nav_demo.mp4` (local, choppy 1.3 fps: sim + renderer share the GPU; re-record with `--top` if needed). Known limitation: the rover sometimes yields *on* the crossing line instead of before it; a Gazebo actor then walks into the stopped rover (footnote in RESULTS) |
 
 ### Not done ⬜ (next steps, in order)
@@ -42,15 +43,9 @@ separately.
    - ~~`docs/METHOD.md`~~: done 2026-10-14 (§3.4 ground clearing / appearance / footprint clearing,
      §3.7 navigation rules, new §3.9 motion-aware keep-out, §4 training pipeline, §5 file map, §6
      current results, §7 limitations, §8 claims 9–16), README intro.
-   - Final demo videos into `docs/figures/` (not in git: `*.mp4` is ignored; decide whether to
-     add them).
+   - ~~Demo videos~~: decided 2026-10-14 to keep `*.mp4` out of git (local only, `docs/figures/`).
 3. **P9 (optional).** A more complex robot URDF (e.g. a Husky description, or Go2 + CHAMP). Only
    the extrinsics (`lidar_offset`), topics and footprint should need changing.
-4. **Housekeeping.** Reviewed 2026-10-14. Keep `data/demo_20261010_212110/bag` (demo-world evaluation
-   set) and `data/demo_20261012_222528` (source of `docs/live_summary.json`: 675 scans, 6.0 scans/s).
-   The other five `data/demo_*` folders (2026-10-10/12, ~37 MB total: older demo videos and logs)
-   are not used by any result; delete them only if the user agrees.
-
 ## Where things are
 | Thing | Location |
 |---|---|
