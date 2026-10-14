@@ -2,7 +2,8 @@
 
 SIH26053 prototype (team LORENZINI). This is the pipeline:
 LiDAR → preprocessing → sparse-CNN semantic segmentation (MinkUNet) → nested variable-resolution
-2.5D semantic elevation map → navigation grid.
+2.5D semantic elevation map → terrain costmap with predicted pedestrian paths → autonomous driving
+with Nav2.
 
 The method is described in [docs/METHOD.md](docs/METHOD.md) and the measurements are in [docs/RESULTS.md](docs/RESULTS.md).
 
@@ -37,6 +38,7 @@ The method is described in [docs/METHOD.md](docs/METHOD.md) and the measurements
 | **Manual test (you drive, 3D view)** | `bash tools/manual_test.sh` (+ `--video data/my_drive.mp4 [--color class\|zone\|cost] [--top]`); guide: [docs/TESTING.md](docs/TESTING.md) |
 | Live sim demo | `source ros2_ws/install/setup.bash && ros2 launch adaptmap_ros adaptmap.launch.py [world:=urban_s21.sdf]` |
 | **Autonomous navigation (Nav2)** | `sudo bash scripts/install_nav2.sh` once, then `ros2 launch adaptmap_nav nav.launch.py` and click "2D Goal Pose" in RViz |
+| Navigation scenarios (pass/fail) | with the Nav2 launch running: `.venv/bin/python tools/nav_scenarios.py --repeat 3`, then `python3 tools/make_results.py` |
 | Navigation scenarios (pass/fail) | with nav running: `.venv/bin/python tools/nav_scenarios.py` |
 | Record demo (video + stats + bag) | `bash tools/capture_demo.sh 100 40` (lap seconds, bag seconds; 0 = no bag) |
 | Stop everything | `bash tools/stop_demo.sh` |

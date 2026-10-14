@@ -1,7 +1,7 @@
 # AdaptMap — Technical Disclosure
 
 **Adaptive variable-resolution 2.5D semantic LiDAR mapping for dynamic environment perception**
-Team LORENZINI · SIH26053 · prototype v0.1 (simulation)
+Team LORENZINI · SIH26053 · prototype v0.2 (simulation with Nav2, validated on real KITTI and SemanticPOSS data)
 
 > This is a technical description of the method, written to support a patent draft. It is not
 > legal advice; the claim-style list in §8 is input for a patent agent, not drafted claims.
@@ -31,10 +31,12 @@ fail at opposite ends:
    ├─ 2. Semantic segmentation sparse 3D CNN (MinkUNet-34, fp16) → per-point class probs  (~28 ms)
    ├─ 3. Distance zoning      Chebyshev distance from map centre → zone index per point;
    │                          zone radii adapt to vehicle speed (§3.8)
-   ├─ 4. Foveated fusion      per-zone grid binning, decayed running fusion, ray clearing  (~7 ms)
+   ├─ 4. Foveated fusion      per-zone grid binning, decayed running fusion; ray clearing,
+   │                          ground clearing, appearance, footprint clearing (§3.4)     (~7 ms)
    ├─ 5. Views                ground surface, height above ground, clearance, ring-gap filling
    ├─ 6. Terrain analysis     slope, step, roughness, curbs → traversability cost (§3.7)
-   └─ 7. Outputs              per-zone 2.5D layers + a Nav2 costmap for path planning
+   ├─ 7. Motion keep-out      pedestrian tracks → lethal corridor of the next 2.5 s (§3.9)
+   └─ 8. Outputs              per-zone 2.5D layers + a Nav2 costmap, every scan
 ```
 
 Everything after the sensor runs inside one process on the GPU, so point clouds are never
@@ -131,11 +133,26 @@ For each scan with timestamp *t*:
    weight and obstacle weight are halved per scan; when the obstacle weight falls below *w_min*
    the cell is reset. Rays passing *over* an object or *under* an overhang (a tree crown) clear
    nothing.
+7. **Ground clearing.** A scan that sees *only ground points* in a cell whose stored top is more
+   than 0.1 m above the scan's top contradicts the stored obstacle (the spot a pedestrian just
+   left). Its obstacle weight is halved per such scan; once it falls below *w_min* the scan
+   *replaces* the cell's statistics instead of being averaged in. Averaging alone (at ~1/w_max per
+   scan) left a lethal residue on the road for seconds after a person walked on.
+8. **Appearance.** The mirror rule: a scan whose non-ground top is more than 0.1 m above the
+   stored top (something walked or drove into the cell) replaces the cell (*a = 0*) and restarts
+   its weight. A new obstacle is therefore in the map after one scan; with plain averaging a
+   person stepping onto a road cell that had full weight took ~1 s to show up, which put a
+   crossing pedestrian ~1 m behind their true position.
+9. **Footprint clearing.** Cells under the robot's own footprint are forgotten every scan. The
+   robot stands there, and those cells lie in the LiDAR's blind disc (a roof-mounted sensor cannot
+   see the ground within a few metres), where neither ray nor ground clearing can observe them; a
+   misclassified glimpse of someone passing close would otherwise stay under the robot.
 
 Counting every scan as one observation, however many points it contributes, stops dense
-near-range cells from becoming "sticky" compared with sparse far ones. Class-aware decay and ray
-clearing are complementary: decay forgets what is no longer seen; clearing removes what is
-seen to be gone.
+near-range cells from becoming "sticky" compared with sparse far ones. The rules are
+complementary: decay forgets what is no longer seen; ray and ground clearing remove what is seen
+to be gone; appearance makes new things count at once. Together they make the map *asymmetric
+in the safe direction*: obstacles appear in one scan, and disappear as soon as there is evidence.
 
 ### 3.4b Views: ground surface, clearance, hole filling
 
@@ -187,6 +204,20 @@ for: anything standing higher than the robot can climb (unless the clearance is 
 robot), slopes over the limit, unclimbable steps and curbs. All limits are robot parameters, so
 the same map serves a rover (12 cm step, 1 m height) or a car.
 
+Two rules are specific to navigation:
+- **Pedestrian keep-out.** Cells whose top class is pedestrian and that stand more than 0.5 m above
+  the ground make every cell within 1 m lethal (personal space plus the distance walked while the
+  costmap is in transit). A person is an obstacle whatever its label, since anything taller than
+  the step limit is; the label adds the margin.
+- **The robot's own footprint is never lethal** in the published costmap. Keep-out discs,
+  predicted corridors (§3.9) and step checks reach into neighbouring cells; if they cover the
+  robot, the controller and every recovery behaviour see a collision at the current pose and the
+  robot deadlocks.
+
+The costmap is built and published on the mapping thread **after every scan** (about 25–45 ms
+including terrain analysis), ahead of any visualisation, so it reaches the planner 0.2–0.4 s
+after the scan.
+
 ### 3.8 Speed-adaptive foveation
 
 The finest zone's radius follows the distance the vehicle needs to react and stop:
@@ -200,6 +231,30 @@ immediately when the speed rises and shrinks only after the target has stayed sm
 
 At walking or rover speeds the 10 m base already covers the stopping envelope. At 8 m/s
 (29 km/h) the 5 cm zone grows to 25 m: 1.33 M cells, still 12× fewer than a uniform 5 cm map.
+
+### 3.9 Motion-aware keep-out for moving people
+
+A keep-out disc marks where a person *is*. A person crossing the robot's path walks into the lane
+at the moment the robot arrives, so with a static disc the planner sees nothing in the way until
+it is too late. `adaptmap/motion.py` predicts instead:
+
+1. The pedestrian cells of each costmap (§3.7) are split into connected blobs, and each blob's
+   centroid is taken in world coordinates.
+2. Blobs are associated with existing tracks by nearest neighbour inside a gate that grows with
+   the elapsed time (0.5 m + 3 m/s · Δt). Unmatched blobs start tracks; tracks unseen for 1 s are
+   dropped.
+3. A track's velocity is its **net displacement over the last 1 s**. It counts as moving only if
+   the history spans at least 0.6 s, the speed is between 0.3 and 3 m/s, and the path is nearly
+   straight (net / travelled distance ≥ 0.7). A static object whose blob merges with a passer-by,
+   or is seen from a changing angle, has a centroid that jumps back and forth; it is fast but goes
+   nowhere, so it gets no prediction.
+4. Each moving track marks a capsule lethal: from the centroid to **the blob's front edge along
+   the velocity** plus *v* · 2.5 s, 0.6 m wide on each side. Moving-class cells fade over
+   τ_dynamic, so a walking person's blob drags a trail and its centroid lags the person by up to
+   ~1 m; the front edge does not.
+
+In the simulated crossing scenario this turned contact at full speed into the robot stopping
+about 3 m from the walker and continuing once they had passed.
 
 ## 4. Semantic segmentation
 
@@ -215,60 +270,95 @@ At walking or rover speeds the 10 m base already covers the stopping envelope. A
 - **Sim-to-real handling:** the simulated sensor copies the KITTI HDL-64 geometry (64 beams,
   +2°/−24.8° vertical FOV, 1.73 m mount). Intensity is replaced with a dataset-mean constant
   because simulated intensity is not physical.
-- **Fine-tuning hook:** `tools/autolabel.py` labels simulated scans exactly from the world
-  manifest (it agrees with the ray-caster's own labels on 97.7 % of points), and
-  `tools/finetune.py` fine-tunes the network on them.
+- **Auto-labelled training data:** randomised simulated worlds (`tools/make_world.py --seed N`) are
+  driven while `tools/record_labeled.py` saves each preprocessed scan with labels from the world
+  manifest's object boxes (`tools/autolabel.py`; 97.7 % agreement with the ray-caster's own
+  labels). A **ground-contact rule** is essential: boxes reach down to the ground, so the
+  road visible around a pedestrian's feet or under a car's edge would be labelled as the object;
+  points less than 8 cm above the ground box under them take the ground class (≈60 % of vehicle
+  and pedestrian labels were ground before this rule). Older recordings were repaired with
+  `tools/fix_labels.py`, which uses the observed ground instead and leaves points with no ground
+  observed within 1 m untouched (next to the robot, inside the blind disc).
+- **Fine-tuning** (`tools/finetune.py`): the 19-class KITTI classifier is replaced by a 10-class
+  head whose rows start from each AdaptMap class's main KITTI class (road ← road,
+  vehicle ← car, …), so training starts from the pretrained behaviour. Loss: class-balanced
+  cross-entropy plus **distillation** towards the frozen pretrained network wherever that teacher
+  is confident and does not contradict the label. This keeps knowledge the simulated worlds do not
+  cover (for example, a pickup's flat bed is still a vehicle). Result: the default sim model
+  reaches 88–90 mIoU on two held-out worlds against 49–51 for the pretrained network.
 
 ## 5. Prototype implementation
 
 | Component | File |
 |---|---|
-| Foveated map engine | `adaptmap/foveated_map.py` |
+| Foveated map engine (fusion, clearing, views, resampling) | `adaptmap/foveated_map.py` |
+| Terrain analysis and costmap | `adaptmap/terrain.py` |
+| Motion-aware keep-out | `adaptmap/motion.py` |
+| Speed-adaptive zone policy | `adaptmap/adaptive.py` |
 | Preprocessing | `adaptmap/preprocess.py` |
 | Segmentation wrapper | `adaptmap/segmentation.py` |
 | Classes & mapping | `adaptmap/classes.py` |
-| ROS 2 node (GridMap, markers, nav grid, stats) | `ros2_ws/src/adaptmap_ros/adaptmap_ros/adaptmap_node.py` |
-| Gazebo world + rover | `tools/make_world.py`, `ros2_ws/src/adaptmap_sim/` |
+| ROS 2 node (costmap, GridMaps, cells, stats) | `ros2_ws/src/adaptmap_ros/adaptmap_ros/adaptmap_node.py` |
+| Nav2 configuration | `ros2_ws/src/adaptmap_nav/` |
+| Gazebo worlds + rover | `tools/make_world.py`, `ros2_ws/src/adaptmap_sim/` |
 | Analytic LiDAR simulator | `tools/synth_scan.py` |
-| Benchmark | `tools/benchmark.py` → `docs/RESULTS.md` |
-| Unit tests | `adaptmap/tests/` |
+| Training data and fine-tuning | `tools/record_labeled.py`, `tools/autolabel.py`, `tools/finetune.py` |
+| Evaluations | `tools/benchmark.py`, `tools/eval_sim_test.py`, `tools/eval_bag.py`, `tools/eval_semanticposs.py`, `tools/run_dataset.py`, `tools/nav_scenarios.py` → `tools/make_results.py` → `docs/RESULTS.md` |
+| Unit tests (CPU, CI) | `adaptmap/tests/` |
 
 ## 6. Measured results (RTX 4050 laptop)
 
-Full numbers are in `docs/RESULTS.md`.
+All numbers come from `docs/RESULTS.md`, which `tools/make_results.py` generates from the
+evaluation tools' JSON output.
 
-**Map efficiency.** Offline benchmark: 300 frames of a 10 Hz simulated drive with moving pedestrians, where
-the same data is also fed to a uniform 5 cm map for comparison.
+**Map efficiency.** Offline benchmark of a simulated 10 Hz drive; a uniform 5 cm map is fed the
+same data for comparison.
 
 | Metric | Uniform 5 cm | AdaptMap | Gain |
 |---|---|---|---|
-| Cells | 16,000,000 | 702,400 | 22.8× |
-| Map memory | 671 MB | 35 MB | 19× |
-| Fusion time / scan | 22.4 ms | 3.7 ms | 6.1× |
-| End-to-end latency (offline, GPU not shared) | — | 75 ms (13.3 Hz) | |
+| Cells (200 × 200 m) | 16,000,000 | 702,400 | 22.8× |
+| Map memory | 916 MB | 48 MB | 19× |
+| Map update per scan (incl. ray clearing) | 40.0 ms | 7.4 ms | 5.4× |
 
-**Live ROS 2 + Gazebo run.** Gazebo, RViz and the renderer share the same GPU:
-- the pipeline takes 144 ms per scan on average;
-- 5.4 scans/s are integrated, and the node always takes the newest scan;
-- peak GPU memory is 445 MB.
+**Speed.** Full pipeline offline: 37.5 ms per scan (27 Hz): preprocess 1.5 ms, MinkUNet-34 in fp16
+28.5 ms, fusion 7.4 ms. Live in ROS 2 with Gazebo, RViz and a video renderer on the same GPU:
+6.0 scans/s; the mapping core alone keeps up with the 10 Hz sensor at 9.3 scans/s. Speed-adaptive
+zones: the 5 cm zone grows to 15.5 m at 5 m/s and 25 m at 8 m/s, with the map update rising only
+from 7.1 to 9.6 ms.
 
-**Segmentation accuracy on Gazebo scans.** 131 scans, ground truth from the world manifest,
-pretrained weights used zero-shot:
-- point accuracy 89.2 %;
-- IoU per class: road 93 %, building/wall 87 %, sidewalk/curb 84 %, vehicle 71 %, pole 35 %,
-  pedestrian 23 %;
-- terrain (grass) and generic crates are poorly separated from sidewalk and walls. The fine-tuning
-  hook is meant to fix these classes.
+**Segmentation** (mIoU over the 9 AdaptMap classes):
+
+| Data | Pretrained (KITTI) | Fine-tuned sim model (default) |
+|---|---|---|
+| Held-out sim world (seed 21, 245 scans) | 49.0 | **88.4** |
+| Held-out demo world (recorded lap) | 51.4 | **90.2** |
+| SemanticPOSS (real, 40-beam, campus; ground merged) | **43.6** | 38.3 (constant intensity) |
+
+**Real data.** KITTI raw drive 0005 (154 real HDL-64 scans with GPS/IMU poses): the full pipeline
+runs at 52 ms per scan (19 Hz) with the pretrained model.
+
+**Autonomous navigation.** Nav2 (SmacPlanner2D + Regulated Pure Pursuit) driving on the AdaptMap
+costmap in the demo world, 5 scripted scenarios × 3 runs: **15/15 passed**. The scenarios are:
+a pedestrian crossing the road, a parked car blocking the lane, a goal behind a 15 cm curb (must be
+refused), a 55 m route past crates and cars, and a U-turn inside the road. Pass means the expected
+outcome, never leaving the road, no contact with static obstacles and no contact with a pedestrian
+while moving. Closest static clearance over all runs: 0.44 m.
 
 ## 7. Limitations of this prototype
 
-- Simulation only. Odometry is ground truth from the simulator, with no localisation drift.
-- No explicit free-space ray clearing; dynamic objects are removed by class-aware decay.
-- Curbs come out as sidewalk-class height steps; no dedicated curb detector or traversability
-  cost yet (next phase).
-- Not yet run on embedded hardware (Jetson / TensorRT).
-- Live rate (5.4 scans/s) is below the 10 Hz LiDAR rate when the simulator shares the GPU; the
-  offline pipeline alone runs at 13 Hz.
+- Odometry is ground truth in simulation (no localisation drift). On KITTI the GPS/IMU poses are
+  used.
+- The sim model is trained with constant intensity and is weaker than the pretrained model on
+  real data (SemanticPOSS 38.3 vs 43.6 mIoU); real sensors use the pretrained model. A mixed
+  sim + real fine-tune would give one model for both.
+- Weakest classes: vegetation (61–72 % IoU in simulation) and pedestrians in an unfamiliar world
+  (65 %).
+- The pedestrian prediction is a constant-velocity extrapolation of the map's own blobs, with no
+  intent model. The robot sometimes yields *on* a crossing line instead of before it.
+- Low obstacles that a stationary robot can no longer see (inside the blind disc) decay with
+  τ_static = 20 s.
+- Not yet run on embedded hardware (Jetson / TensorRT). Live rate (6 scans/s) is below the
+  10 Hz sensor rate only when the simulator and visualisation share the laptop GPU.
 
 ## 8. Candidate novel elements (input for claims)
 
@@ -287,3 +377,24 @@ pretrained weights used zero-shot:
 7. Optional distance-zoned point thinning before segmentation, using the same zone schedule.
 8. An end-to-end GPU pipeline (filter → sparse-CNN segmentation → foveated fusion) at sensor
    rate on laptop-class hardware.
+9. Free-space evidence from the scan's own rays (ray clearing), restricted to the inside of a
+   cell's stored obstacle span, so rays passing over objects or under overhangs clear nothing.
+10. Asymmetric fusion for safety: a scan that contradicts a stored obstacle with ground-only
+    returns discounts it (ground clearing), and a scan whose top rises above the stored top
+    replaces the cell (appearance), so obstacles appear in one scan and vanish on evidence.
+11. Forgetting the cells under the robot's footprint each scan, because they lie in the sensor's
+    blind disc where no clearing evidence can arrive, and never marking the robot's own footprint
+    lethal in the published costmap.
+12. A clearance layer (free height under the lowest obstacle point above the ground), letting a
+    2.5D map mark space under overhangs as drivable for a given robot height.
+13. Ring-gap filling that interpolates ground only between observed cells on opposite sides,
+    within a zone-dependent radius, never extrapolating into shadows.
+14. Speed-adaptive foveation: the fine zone's radius follows reaction plus braking distance, with
+    hysteresis, and resizing resamples the map (max-height when coarsening) instead of clearing it.
+15. A motion-aware keep-out computed from the map itself: tracking moving-class blobs, accepting a
+    velocity only when the path over a time window is nearly straight, and marking the corridor
+    from the blob's *front edge* (not its lagging centroid) for a prediction horizon as lethal.
+16. A training pipeline for the segmentation network from simulation alone: randomised worlds,
+    exact labels from the world manifest with a ground-contact rule, a reduced-class head
+    initialised from the pretrained classifier's rows, and distillation towards the pretrained
+    network where it is confident and consistent with the label.

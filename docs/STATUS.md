@@ -43,10 +43,9 @@ separately.
 3. **P8 polish:**
    - ~~`docs/TESTING.md` numbers~~: done 2026-10-13 (speed table, "Known mistakes", 5.4× map
      update, v1/v2 wording in `make_results.py`).
-   - `docs/METHOD.md` §6–8: refresh the results summary and add claims for ray clearing,
-     clearance, ring-gap filling, speed-adaptive resampling, the auto-labelling pipeline,
-     distillation, and the P5 parts (appearance, ground clearing, motion-aware keep-out, footprint
-     clearing, per-scan costmap).
+   - ~~`docs/METHOD.md`~~: done 2026-10-14 (§3.4 ground clearing / appearance / footprint clearing,
+     §3.7 navigation rules, new §3.9 motion-aware keep-out, §4 training pipeline, §5 file map, §6
+     current results, §7 limitations, §8 claims 9–16), README intro.
    - Final demo videos into `docs/figures/` (not in git: `*.mp4` is ignored; decide whether to
      add them).
 4. **P9 (optional).** A more complex robot URDF (e.g. a Husky description, or Go2 + CHAMP). Only

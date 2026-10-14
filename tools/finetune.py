@@ -124,6 +124,10 @@ def main():
     ap.add_argument("--distill-conf", type=float, default=0.8)
     a = ap.parse_args()
     cfg = load_config()
+    # start (and distil) from the SemanticKITTI-pretrained network, not the config's default model, which is a
+    # fine-tuned 10-class one since v2 (its head has no KITTI rows to initialise from)
+    if "model_real" in cfg:
+        cfg["model"] = {**cfg["model"], **cfg["model_real"]}
     train, test = scans(a.data), scans(a.test)
     assert train and test, "no scans found - run tools/gen_training_data.sh first"
 
