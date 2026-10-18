@@ -138,8 +138,8 @@ global_costmap:
       global_frame: odom
       robot_base_frame: base_link
       rolling_window: true          # AdaptMap is a robot-centred local map (+-50 m); beyond it the window is
-      width: 160                    # unknown, so goals up to 80 m away can still be planned towards
-      height: 160
+      width: 260                    # unknown, so goals up to 130 m away can still be planned towards. A goal
+      height: 260                   # outside this window is NOT refused: Nav2 can report success without reaching it
       resolution: 0.2
       footprint: "[[0.5, 0.35], [0.5, -0.35], [-0.5, -0.35], [-0.5, 0.35]]"
       trinary_costmap: false

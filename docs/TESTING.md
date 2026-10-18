@@ -197,6 +197,26 @@ goal, a long route, a U-turn), with pass/fail and safety distances:
 `.venv/bin/python tools/nav_scenarios.py --repeat 3` (while nav is running, about 13 min), then
 `python3 tools/make_results.py` to put the table into `docs/RESULTS.md`. All 15 runs should pass.
 
+## Stress test: five worlds, easy to brutal
+
+```bash
+bash tools/run_tier_suite.sh 3            # all five worlds, every scenario 3 times (~1.5 h)
+bash tools/run_tier_suite.sh 1 4          # just world 4, once
+python3 tools/make_results.py             # tables into docs/RESULTS.md
+```
+
+| World | What it throws at the robot |
+|---|---|
+| 1 Open road | straight run, crate on the line, lane change, U-turn, a goal behind a curb |
+| 2 Parked street | double-parked SUV, a single 1.7 m gap, parking between cars, a slow crosser |
+| 3 Pedestrian zone | two people crossing at once, one walking head-on, a runner, one stopping mid-road |
+| 4 Obstacle course | 1.4 m opening, 0.55 m gap (must refuse), 20 cm box, 4 cm pole, speed bump, 15 cm wall, overhangs |
+| 5 Chaos | narrow street, a person stepping out from behind a parked car, chicane, a group, all at once |
+
+To watch one world yourself: `ros2 launch adaptmap_nav nav.launch.py world:=tier5.sdf` and give goals
+in RViz. Where it struggles (see `docs/RESULTS.md`): after stopping in a very tight space it may not
+move off again, and it sometimes stops *on* a crossing line instead of before it.
+
 ## Known mistakes you will see
 
 The default network is fine-tuned on auto-labelled scans from 12 simulated worlds

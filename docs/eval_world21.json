@@ -32,7 +32,7 @@
   "scans": 245
  },
  {
-  "model": "fine-tuned v2: 12 worlds + distillation, default",
+  "model": "fine-tuned v2: 12 worlds + distillation",
   "miou": 0.8843,
   "iou": {
    "road": 0.959,
@@ -48,7 +48,7 @@
   "scans": 245
  },
  {
-  "model": "fine-tuned v3: v2 recipe on corrected labels",
+  "model": "fine-tuned v3: v2 recipe on corrected labels, default",
   "miou": 0.8961,
   "iou": {
    "road": 0.976,

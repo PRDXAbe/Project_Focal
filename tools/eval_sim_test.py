@@ -19,9 +19,9 @@ from finetune import build_model, evaluate, scans  # noqa: E402
 MODELS = [  # (row name, config, checkpoint, 10-class head already trained)
     ("pretrained (KITTI head mapped)", "checkpoints/minkunet.py", "checkpoints/minkunet.pth", False),
     ("fine-tuned v1: 6 worlds", "checkpoints/minkunet_adapt10.py", "checkpoints/minkunet_adapt10_v1.pth", True),
-    ("fine-tuned v2: 12 worlds + distillation, default", "checkpoints/minkunet_adapt10.py",
+    ("fine-tuned v2: 12 worlds + distillation", "checkpoints/minkunet_adapt10.py",
      "checkpoints/minkunet_adapt10_v2.pth", True),
-    ("fine-tuned v3: v2 recipe on corrected labels", "checkpoints/minkunet_adapt10_v3.py",
+    ("fine-tuned v3: v2 recipe on corrected labels, default", "checkpoints/minkunet_adapt10_v3.py",
      "checkpoints/minkunet_adapt10_v3.pth", True),
 ]
 

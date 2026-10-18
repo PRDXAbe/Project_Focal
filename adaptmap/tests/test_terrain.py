@@ -70,6 +70,17 @@ def test_obstacle_lethal_but_overhang_passable():
     assert t["cost"][at(7.5, 0)].item() < terrain.LETHAL
 
 
+def test_ground_next_to_wall_stays_free():
+    """A 1.4 m opening between two walls must not shrink: the ground at a wall's foot is not a step."""
+    ground = plane(2, 10, -3, 3, lambda x, y: torch.zeros_like(x))
+    walls = [torch.cat([plane(6, 6.3, y0, y1, lambda x, y, z=z: torch.full_like(x, z)) for z in (0.3, 0.6, 0.9)])
+             for y0, y1 in ((-3, -0.7), (0.7, 3))]
+    _, t, at = run([(ground, "road"), (walls[0], "building_wall"), (walls[1], "building_wall")])
+    assert t["cost"][at(6.15, -1.0)].item() == terrain.LETHAL           # the walls themselves
+    free = [t["cost"][at(6.15, y)].item() < terrain.LETHAL for y in (-0.5, -0.3, 0.0, 0.3, 0.5)]
+    assert all(free)                                                   # the whole 1.4 m opening minus pooling
+
+
 def test_pedestrian_keep_out_but_not_crate():
     ground = plane(2, 14, -3, 3, lambda x, y: torch.zeros_like(x))
     box = lambda x0, y0, h: torch.cat([plane(x0, x0 + 0.4, y0, y0 + 0.4, lambda x, y, z=z: torch.full_like(x, z))  # noqa: E731

@@ -34,7 +34,7 @@
   }
  },
  {
-  "model": "fine-tuned v2 (12 worlds + distillation, default)",
+  "model": "fine-tuned v2 (12 worlds + distillation)",
   "scans": 131,
   "accuracy": 0.9871302843093872,
   "miou": 0.9018988013267517,
@@ -51,7 +51,7 @@
   }
  },
  {
-  "model": "fine-tuned v3 (v2 recipe, corrected labels)",
+  "model": "fine-tuned v3 (v2 recipe, corrected labels, default)",
   "scans": 131,
   "accuracy": 0.9895064830780029,
   "miou": 0.9041880369186401,

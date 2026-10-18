@@ -193,8 +193,11 @@ ROS node publishes:
 On the navigation grid (0.2 m, ±50 m):
 
 - **slope** = gradient of the smoothed ground surface;
-- **step** = largest height jump of the *drivable surface* to a neighbouring cell (the drivable
-  surface is the ground under passable overhangs and the top surface elsewhere);
+- **step** = largest *drop* of the *drivable surface* from a cell to its neighbours (the drivable
+  surface is the ground under passable overhangs and the top surface elsewhere). It is one-sided on
+  purpose: the higher cell of an edge (a curb's top, a drop-off's rim) carries it, the ground at the
+  foot of a wall does not. A two-sided step gave every wall and crate a lethal 0.2 m fringe, and a
+  1.4 m opening looked 0.9 m wide to the planner;
 - **roughness** = local standard deviation of the drivable surface;
 - **curb** = a 5–30 cm step where road and sidewalk cells meet.
 
@@ -202,7 +205,9 @@ The cost (0 free … 99, 100 lethal, −1 unknown) is a class prior (road 0, ter
 vegetation 60), plus slope and roughness terms and a penalty for filled cells. It is made lethal
 for: anything standing higher than the robot can climb (unless the clearance is higher than the
 robot), slopes over the limit, unclimbable steps and curbs. All limits are robot parameters, so
-the same map serves a rover (12 cm step, 1 m height) or a car.
+the same map serves a rover (12 cm step, 1.85 m height including its LiDAR mast) or a car. The
+height must be the robot's *full* height: with the rover's 0.4 m body height the map called a bar
+1.3 m up passable, and the mast would have hit it.
 
 Two rules are specific to navigation:
 - **Pedestrian keep-out.** Cells whose top class is pedestrian and that stand more than 0.5 m above
@@ -285,7 +290,7 @@ about 3 m from the walker and continuing once they had passed.
   cross-entropy plus **distillation** towards the frozen pretrained network wherever that teacher
   is confident and does not contradict the label. This keeps knowledge the simulated worlds do not
   cover (for example, a pickup's flat bed is still a vehicle). Result: the default sim model
-  reaches 88–90 mIoU on two held-out worlds against 49–51 for the pretrained network.
+  reaches 89.6 and 90.4 mIoU on two held-out worlds against 49–51 for the pretrained network.
 
 ## 5. Prototype implementation
 
@@ -328,21 +333,38 @@ from 7.1 to 9.6 ms.
 
 **Segmentation** (mIoU over the 9 AdaptMap classes):
 
-| Data | Pretrained (KITTI) | Fine-tuned sim model (default) |
+| Data | Pretrained (KITTI) | Fine-tuned sim model (default, v3) |
 |---|---|---|
-| Held-out sim world (seed 21, 245 scans) | 49.0 | **88.4** |
-| Held-out demo world (recorded lap) | 51.4 | **90.2** |
-| SemanticPOSS (real, 40-beam, campus; ground merged) | **43.6** | 38.3 (constant intensity) |
+| Held-out sim world (seed 21, 245 scans) | 49.0 | **89.6** |
+| Held-out demo world (recorded lap) | 51.4 | **90.4** |
+| SemanticPOSS (real, 40-beam, campus; ground merged) | **43.6** | 38.3 (v2, constant intensity) |
 
 **Real data.** KITTI raw drive 0005 (154 real HDL-64 scans with GPS/IMU poses): the full pipeline
 runs at 52 ms per scan (19 Hz) with the pretrained model.
 
 **Autonomous navigation.** Nav2 (SmacPlanner2D + Regulated Pure Pursuit) driving on the AdaptMap
-costmap in the demo world, 5 scripted scenarios × 3 runs: **15/15 passed**. The scenarios are:
+costmap in the demo world, 5 scripted scenarios × 3 runs: **14/15 passed** (15/15 with the earlier v2
+model; the miss is the robot yielding on the crossing line, see below). The scenarios are:
 a pedestrian crossing the road, a parked car blocking the lane, a goal behind a 15 cm curb (must be
 refused), a 55 m route past crates and cars, and a U-turn inside the road. Pass means the expected
 outcome, never leaving the road, no contact with static obstacles and no contact with a pedestrian
-while moving. Closest static clearance over all runs: 0.44 m.
+while moving.
+
+**Stress test: five worlds of rising difficulty** (`tools/make_tier_worlds.py`, 30 scenarios × 3
+runs): **78/90 runs passed**. By world: open road 15/15, parked street 13/15, pedestrian zone
+16/18, obstacle course 24/24, chaos 10/18. **In none of the 90 runs did the robot drive into a
+pedestrian.** It handles a 1.4 m opening, a 4 cm pole, a 20 cm box, a 6 cm bump (driven over), a
+pedestrian stepping out from behind a parked car, a runner, a person stopping in the lane, and
+refuses every goal that has no safe way (curb, 0.55 m gap, 15 cm wall across the road, 1.3 m
+overhang). The failures, by cause:
+- *stuck after stopping in a tight corridor* (6 runs): having yielded between a parked car and an
+  obstacle, the controller does not move off again (Nav2 local planner tuning);
+- *yields on the crossing line* (2 runs): the person then walks into the stopped robot and Nav2
+  aborts the goal;
+- *contact with a 25 cm crate* (2 runs) while manoeuvring around a person walking head-on in a
+  single lane, and *contact with a parked car* (1 run) in the narrow street;
+- *over-cautious with a 2 m/s runner* (1 run): the long predicted corridor of a person running back
+  and forth blocks the road until the time limit.
 
 ## 7. Limitations of this prototype
 
@@ -354,7 +376,13 @@ while moving. Closest static clearance over all runs: 0.44 m.
 - Weakest classes: vegetation (61–72 % IoU in simulation) and pedestrians in an unfamiliar world
   (65 %).
 - The pedestrian prediction is a constant-velocity extrapolation of the map's own blobs, with no
-  intent model. The robot sometimes yields *on* a crossing line instead of before it.
+  intent model. The robot sometimes yields *on* a crossing line instead of before it, and is
+  over-cautious with fast runners (the predicted corridor scales with speed).
+- In tight spaces (a single lane between parked cars and obstacles) Nav2's controller can fail to
+  move off again after yielding, and in two runs the robot touched a low (25 cm) crate while
+  manoeuvring there. The stall is local-planner behaviour; for the crate contacts it is not yet
+  established whether the planner cut too close or the crate faded from the map while it sat inside
+  the blind disc next to the robot.
 - Low obstacles that a stationary robot can no longer see (inside the blind disc) decay with
   τ_static = 20 s.
 - Not yet run on embedded hardware (Jetson / TensorRT). Live rate (6 scans/s) is below the

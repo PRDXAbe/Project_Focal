@@ -22,7 +22,7 @@ The method is described in `docs/METHOD.md`; the numbers are in `docs/RESULTS.md
   - `foveated_map.py`: the map (fusion, ray clearing, views, `set_zones`).
   - `preprocess.py`, `segmentation.py`, `terrain.py`, `adaptive.py`, `classes.py`, `config.py`.
   - `motion.py`: pedestrian tracking and the predicted keep-out corridor for Nav2.
-  - `tests/`: 32 pytest tests; CPU-safe, also run by GitHub Actions.
+  - `tests/`: 33 pytest tests; CPU-safe, also run by GitHub Actions.
 - `configs/adaptmap.yaml`: every tunable value (zones, fusion, ray clearing, terrain limits,
   adaptive zones, model).
 - `ros2_ws/src/`:
@@ -67,8 +67,9 @@ The method is described in `docs/METHOD.md`; the numbers are in `docs/RESULTS.md
 - **Results:** never hand-edit numbers into RESULTS.md. Write JSON to `docs/`, then run
   `python3 tools/make_results.py`.
 - **Models:**
-  - the default model (`configs` → `model`) is the sim fine-tuned
-    `checkpoints/minkunet_adapt10.pth` (v2);
+  - the default model (`configs` → `model`) is the sim fine-tuned `checkpoints/minkunet_adapt10_v3.pth`
+    (v3, trained on the corrected labels; v2 labelled car sides next to the robot as road and froze
+    the robot beside parked cars);
   - real-sensor tools use `model_real`, the SemanticKITTI-pretrained `minkunet.pth`, with real
     intensity;
   - the sim model expects constant intensity 0.25.

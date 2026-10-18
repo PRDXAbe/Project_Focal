@@ -105,7 +105,7 @@ def tier2():
     mw.actor("ped_1", [(110, -6.5), (60, -6.5)], speed=1.4)
     return "Parked street", road_w, [
         sc("double_parked", (20, -1.5, 0), (46, -1.5), "reach", 80, "an SUV double-parked in the right lane at x = 33"),
-        sc("slow_crosser", (28, 0.5, 0), (52, 0.5), "reach", 90, "a pedestrian crosses at 0.7 m/s at x = 40"),
+        sc("slow_crosser", (24, 1.0, 0), (52, 1.0), "reach", 90, "a pedestrian crosses at 0.7 m/s at x = 40"),
         sc("narrow_gap", (55, 0.3, 0), (76, 0.3), "reach", 90, "crates and parked cars leave a single 1.7 m gap"),
         sc("park_between_cars", (74, -0.5, 0), (85, -2.6), "reach", 80, "goal in a 6 m gap between parked cars"),
         sc("long_route", (0, 0.0, 0), (118, -0.5), "reach", 240, "118 m past everything above"),
@@ -178,6 +178,46 @@ def tier5():
     ]
 
 
+def check(objs, road_half, scenarios, res=0.1, half_w=0.335, step=0.12):
+    """Static sanity check of each scenario on a 10 cm grid: the start pose is free, and a path for a robot
+    `half_w` wide that stays on the road exists for 'reach' goals and does not for 'refuse' goals.
+    Pedestrians are ignored; obstacles count when they reach above `step` and start below ROBOT_TOP."""
+    import numpy as np
+    from scipy import ndimage
+    road = [o for o in objs if o["name"] == "road"][0]
+    x0 = road["pose"][0] - road["size"][0] / 2
+    nx, ny = int(road["size"][0] / res), int(2 * road_half / res)
+    X, Y = np.meshgrid(x0 + (np.arange(nx) + 0.5) * res, -road_half + (np.arange(ny) + 0.5) * res, indexing="ij")
+    occ = np.zeros((nx, ny), bool)
+    for o in objs:
+        if o["type"] == "actor" or o["class"] in ("road", "sidewalk_curb", "terrain"):
+            continue
+        cx, cy, cz, yaw = o["pose"]
+        sx, sy, sz = o["size"]
+        if cz - sz / 2 >= ROBOT_TOP or cz + sz / 2 <= step:
+            continue
+        c, s_ = math.cos(yaw), math.sin(yaw)
+        occ |= (abs(c * (X - cx) + s_ * (Y - cy)) <= sx / 2) & (abs(-s_ * (X - cx) + c * (Y - cy)) <= sy / 2)
+    k = int(math.ceil(half_w / res))
+    d = np.arange(-k, k + 1)
+    blocked = ndimage.binary_dilation(occ, (d[:, None] ** 2 + d[None] ** 2) * res * res <= half_w ** 2)
+    blocked[:, :k] = blocked[:, -k:] = True            # the body must stay on the road (curbs)
+    lab, _ = ndimage.label(~blocked)
+    bad = []
+    for c in scenarios:
+        (sx_, sy_, _), (gx, gy) = c["start"], c["goal"]
+        si, sj = int((sx_ - x0) / res), int((sy_ + road_half) / res)
+        free = not blocked[si, sj]
+        if abs(gy) < road_half:
+            gi, gj = int((gx - x0) / res), int((gy + road_half) / res)
+            path = free and not blocked[gi, gj] and lab[si, sj] == lab[gi, gj]
+        else:
+            path = False
+        if not free or path != (c["expect"] == "reach"):
+            bad.append(f"{c['name']}: start free {free}, path exists {path}, expected {c['expect']}")
+    return bad
+
+
 def main():
     for n, fn in enumerate([tier1, tier2, tier3, tier4, tier5], 1):
         mw.objs.clear()
@@ -186,6 +226,13 @@ def main():
         start = scenarios[0]["start"]
         mw.write(f"tier{n}", {"tier": n, "title": title, "road_half": road_w / 2, "robot_top": ROBOT_TOP,
                               "scenarios": scenarios}, start=(start[0], start[1], start[2]))
+        bad = check(mw.objs, road_w / 2, scenarios)
+        print(f"  geometry check: {len(scenarios) - len(bad)}/{len(scenarios)} scenarios consistent")
+        for b in bad:
+            print("  PROBLEM", b)
+        for c in scenarios:
+            if math.hypot(c["goal"][0] - c["start"][0], c["goal"][1] - c["start"][1]) > 125:
+                print(f"  PROBLEM {c['name']}: goal beyond the 260 m Nav2 planning window")
 
 
 if __name__ == "__main__":

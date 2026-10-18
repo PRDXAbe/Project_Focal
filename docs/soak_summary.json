@@ -1,0 +1,13 @@
+{
+ "what": "Nav2 demo suite x3 driving continuously (sim + AdaptMap + Nav2, no visualisation)",
+ "minutes": 11.6,
+ "scans": 5329,
+ "scans_per_s": 7.6,
+ "total_ms_first_quarter": 131.5,
+ "total_ms_last_quarter": 94.7,
+ "gpu_peak_mb_first_quarter": 379.3,
+ "gpu_peak_mb_last_quarter": 379.3,
+ "rss_mb_after_1_min": 1696,
+ "rss_mb_after_4_min": 1713,
+ "rss_mb_end": 1714
+}

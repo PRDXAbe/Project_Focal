@@ -61,9 +61,12 @@ def analyze(nv, cfg):
     passable_under = torch.isfinite(clear) & (clear > cfg.get("robot_height", 1.0))
     surf = torch.where(passable_under, ground, elev)
 
-    # step: biggest drop/rise of the drivable surface within one cell's neighbourhood
+    # step: biggest drop from this cell to its neighbourhood. One-sided on purpose: the higher cell of an
+    # edge carries it (a curb's top, a drop-off's rim); the ground at the foot of a wall does not, so free
+    # space next to obstacles keeps its width (two-sided, every wall and crate grew a lethal 0.2 m fringe
+    # and a 1.4 m opening looked 0.9 m wide). Anything taller than max_step is lethal as an obstacle anyway.
     ks = max(1, int(round(cfg.get("step_window", 0.2) / res)))
-    step = torch.maximum(_nan_pool(surf, ks, 1) - surf, surf - _nan_pool(surf, ks, -1))
+    step = surf - _nan_pool(surf, ks, -1)
 
     # roughness: std of the drivable surface over a small window
     kr = max(1, int(round(cfg.get("rough_window", 0.4) / 2 / res)))

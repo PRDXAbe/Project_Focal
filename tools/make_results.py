@@ -8,7 +8,9 @@ Inputs (each optional; missing sections are skipped):
   docs/eval_demo_world.json       tools/eval_bag.py --json      second held-out world
   docs/semanticposs_results.json  tools/eval_semanticposs.py    real labelled data
   docs/kitti_*_summary.json       tools/run_dataset.py          real KITTI drive
-  docs/nav_results.json           tools/nav_scenarios.py        Nav2 scenarios
+  docs/nav_results.json           tools/nav_scenarios.py        Nav2 scenarios (demo world)
+  docs/nav_tier{1..5}.json        tools/run_tier_suite.sh       Nav2 stress test, five worlds
+  docs/soak_summary.json          (recorded /adaptmap/stats)    long-run stability
 Usage: python3 tools/make_results.py
 """
 import glob
@@ -99,8 +101,9 @@ def main():
               "inside the LiDAR's blind disc. That made v2 look worse on vehicles (46 %) and v1 better; fixed and "
               "relabelled 2026-10-14. v1 was trained only on those corrupted worlds and learned the same mistake "
               "(vehicle 48 %). v3 retrains the v2 recipe on the corrected labels: +1.2 mIoU here and +0.2 on the demo "
-              "world, but 2 points lower on demo-world pedestrians; v2 stays the default (the navigation results were "
-              "validated with it).", ""]
+              "world, and it labels car sides next to the robot correctly, which v2 did not: in the navigation stress test v2 "
+              "called 30 % of a parked car's points road from beside it and the robot froze in an empty lane. v3 is the "
+              "default; v2 is 2 points better on demo-world pedestrians.", ""]
     demo = load("eval_demo_world.json")
     if demo:
         L += ["### Simulation, demo world (second held-out world, recorded lap)", ""]
@@ -155,6 +158,52 @@ def main():
                   "The rover was never moving while in contact. Stopping *before* a crossing instead of "
                   "on it is a known limitation."]
         L.append("")
+
+    soak = load("soak_summary.json")
+    if soak:
+        L += ["## Long run (stability)", "",
+              f"{soak['what']}: {soak['minutes']} min, {soak['scans']:,} scans ({soak['scans_per_s']} scans/s). Pipeline time "
+              f"{soak['total_ms_first_quarter']} ms/scan in the first quarter, {soak['total_ms_last_quarter']} ms in the last; GPU "
+              f"peak {soak['gpu_peak_mb_first_quarter']:.0f} → {soak['gpu_peak_mb_last_quarter']:.0f} MB; process memory "
+              f"{soak['rss_mb_after_1_min']} MB after 1 min, {soak['rss_mb_after_4_min']} MB after 4 min, {soak['rss_mb_end']} MB "
+              "at the end. No growth after warm-up: no leak, no slowdown.", ""]
+
+    tiers = [(n, load(f"nav_tier{n}.json")) for n in range(1, 6)]
+    tiers = [(n, r) for n, r in tiers if r]
+    if tiers:
+        W = ROOT / "ros2_ws" / "src" / "adaptmap_sim" / "worlds"
+        L += ["## Navigation stress test: five worlds of rising difficulty", "",
+              "`tools/make_tier_worlds.py` builds five test worlds, each with its own scenarios; `tools/run_tier_suite.sh` "
+              "runs them (`tools/nav_scenarios.py --world tierN`). A *refuse* scenario passes when the robot does not reach "
+              "a goal that has no safe way to it. Contact counts against the robot's full height including the 1.8 m "
+              "LiDAR mast, so an overhang below that is a collision.", "",
+              "| Tier | World | Scenarios | Runs passed |", "|---|---|---|---|"]
+        for n, rs in tiers:
+            m = json.loads((W / f"tier{n}_manifest.json").read_text())
+            L.append(f"| {n} | {m['title']} | {len(m['scenarios'])} | {sum(r['passed'] for r in rs)}/{len(rs)} |")
+        L.append("")
+        med = lambda v: sorted(v)[len(v) // 2]
+        for n, rs in tiers:
+            m = json.loads((W / f"tier{n}_manifest.json").read_text())
+            L += [f"### Tier {n}: {m['title']}", "",
+                  "| Scenario | What it tests | Expected | Passed | Time (median) | Min clearance (static) | "
+                  "Min distance to pedestrians |", "|---|---|---|---|---|---|---|"]
+            for c in m["scenarios"]:
+                rr = [r for r in rs if r["scenario"] == c["name"]]
+                if not rr:
+                    continue
+                st = [r for r in rr if r["min_clearance_static_m"] is not None]
+                ws = min(st, key=lambda r: r["min_clearance_static_m"]) if st else None
+                stat = "–" if ws is None else f"{ws['min_clearance_static_m']:.2f} m ({ws['closest_static']})"
+                pd = [r for r in rr if r["min_clearance_pedestrian_m"] is not None]
+                wp = min(pd, key=lambda r: r["min_clearance_pedestrian_m"]) if pd else None
+                ped = "–" if wp is None else (f"{wp['min_clearance_pedestrian_m']:.2f} m at "
+                                             f"{wp['rover_speed_at_min_pedestrian_m_s']:.1f} m/s")
+                ok = sum(r["passed"] for r in rr)
+                L.append(f"| {c['name'].replace('_', ' ')} | {c['what']} | {c['expect']} | "
+                         f"{ok}/{len(rr)} {'✅' if ok == len(rr) else '❌'} | {med([r['time_s'] for r in rr])} s | "
+                         f"{stat} | {ped} |")
+            L.append("")
 
     (D / "RESULTS.md").write_text("\n".join(L))
     print(f"wrote {D / 'RESULTS.md'} ({len(L)} lines)")
