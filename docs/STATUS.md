@@ -2,8 +2,7 @@
 
 ## ▶ Resume here (new conversation)
 These two files (`CLAUDE.md` + this one) are the full context. **Don't re-explore the codebase or
-re-run old benchmarks.** Everything below is verified, committed and pushed (working tree clean
-after the P5 commit).
+re-run old benchmarks.** Everything below is verified, committed and pushed.
 
 To start the next session:
 1. Continue with **"Not done"** below (all optional).
@@ -34,21 +33,27 @@ separately.
 | Stress test | Five test worlds of rising difficulty (`tools/make_tier_worlds.py`, 30 scenarios, geometry self-check) run by `tools/run_tier_suite.sh`. Fixes it forced: **one-sided step rule** (walls grew a lethal 0.2 m fringe: a 1.4 m opening looked 0.9 m), **robot_height 1.85 m** (incl. LiDAR mast; a 1.3 m bar was "passable"), **default model v3** (v2 called a car's side road from beside it → froze in an empty lane), Nav2 global window 260 m (a goal outside it came back as a false *success*). 11.6 min soak: no leak, no slowdown | **78/90** (tiers 15/15, 13/15, 16/18, 24/24, 10/18), **0 runs drove into a pedestrian**; demo world 14/15 with v3. Failures: stuck after yielding in a tight corridor (6), yields on the crossing line (2+1 demo), touched a 25 cm crate (2) / parked car (1) in the narrow street, over-cautious with a runner (1) |
 | P5 | Nav2 on the AdaptMap costmap (SmacPlanner2D + RegulatedPurePursuit), 5 scripted scenarios run 3× each. New method parts: *appearance* (a new obstacle replaces a cell in one scan instead of being averaged in over ~1 s), ground clearing, 1 m pedestrian keep-out, **motion-aware keep-out** (`adaptmap/motion.py`: pedestrian tracks → lethal corridor of the next 2.5 s, measured from the blob's front edge), footprint clearing (map + published costmap never lethal under the rover), costmap every scan | **15/15 runs pass** (`docs/nav_results.json`); 31 tests. Video `docs/figures/nav_demo.mp4` (local, choppy 1.3 fps: sim + renderer share the GPU; re-record with `--top` if needed). Known limitation: the rover sometimes yields *on* the crossing line instead of before it; a Gazebo actor then walks into the stopped rover (footnote in RESULTS) |
 | Judge UI | `bash tools/dashboard.sh [tierN]` → local page (`tools/dashboard.py` + `.html`, Flask, no CDN): why (cells, zones, adaptive zones from `docs/*.json`), live top-down map (semantic / planner view, Nav2 path, pedestrians + predicted 2.5 s corridor), scenario buttons with live captions and a Stop button, measured results; `--offline` shows recorded video + results. `nav_scenarios.Runner.run` got a `progress` callback and an `abort` flag | Verified live in the demo world: pedestrian_crossing and around_lane_car passed from the page, curb goal correctly refused, Stop works |
+| Nav improvements | From the stress test (`8b39a50`, `8afa3e3`): people are timing constraints for the planner (`/adaptmap/costmap_plan`: keep-outs costly, not lethal; robot_radius 0.40 so no detours through curb gaps), controller `failure_tolerance` 20 s (wait out a crossing group), keep-outs seeded only from person cells seen within 0.3 s (a walker's fading trail blocks nothing), decay at the expected rate under the class probabilities, the driven trail counts as known ground (recoveries no longer abort on the blind disc), corridor radius 1.0 m, planner margin around the footprint only for cells not seen for 1 s (without that gate the rover crept into a parked car in 1 of 3 curb-refusal runs; after: 3/3, 1.4 m clear). tier5 crate start moved out of the blind disc; `make_tier_worlds.py` checks it | Full eval *before* the 1 s gate: tiers **78/90** (15, 15, 16, 22, 10 of 15, 15, 18, 24, 18), demo world 14/15. Parked street 13 → 15/15; speed bump 3 → 1/3 (stalls with its front against the bump in every run old and new; physics). After the gate: curb refusal 3/3, tier 5 8/12 (was 10/18). 39 tests |
+| P9 | Robot profiles `configs/robots/{rover,ugv}.yaml` (extrinsics, topics, self box, footprint, height, Nav2 footprint) selected by `robot:=` / `--robot` / `ROBOT=ugv bash tools/dashboard.sh`; 1.40 × 0.95 m 4-wheel skid-steer UGV (`ros2_ws/src/adaptmap_sim/robots/ugv/rover/`), LiDAR 1.30 m up, 0.35 m ahead; scans shifted to the model's 1.73 m for segmentation only (`85875c9`) | UGV, 1 run each, no retraining: tier 1 5/5, demo world 5/5, tier 4 7/8 (stops before the 1.4 m opening without contact: 0.2 m costmap cells eat it; radius 0.50 didn't help) → `docs/nav_*_ugv.json`, RESULTS section |
+| v4 mixed fine-tune (trained, not evaluated) | `tools/finetune.py --real data/real/semanticposs/dataset --iters 12000 --z-jitter 0.25` (sim + SemanticPOSS 00–04, test 05, intensity dropout 0.5, set-valued ground loss) → `checkpoints/minkunet_adapt10_v4.pth`, log `data/finetune_model_v4.log` (82 min) | Best (iter 10000; in-training eval, 60 scans, constant intensity): sim world 21 **79.9** (v3 89.6 on all scans; vegetation only 19 %), SemanticPOSS 05 **58.3** (7 merged classes; same protocol at step 0: 42.0). Later steps overfit the sim score (74.5 at 12000) |
 
 ### Not done ⬜ (next steps, in order)
-1. **Optional navigation improvements** found by the stress test (all Nav2/behaviour, not the map):
-   move off again after yielding in tight corridors (RPP collision look-ahead / recovery tuning);
-   stop *before* a crossing line; less conservative corridor for fast runners; check whether the
-   25 cm crate contact is the planner or the crate fading inside the blind disc.
-2. **Real-data accuracy (optional).** Fine-tune on mixed sim + SemanticPOSS sequences 00–04 with
-   intensity dropout, testing on 05: one model for sim and real data.
-3. **P9 (optional).** A bigger robot (Husky / Go2): extrinsics (`lidar_offset`), topics, footprint,
-   `terrain.robot_height`.
+1. **Evaluate v4 properly:** `tools/eval_sim_test.py` (world 21, all scans), `tools/eval_bag.py` (demo
+   world), `tools/eval_semanticposs.py` (real intensity and constant 0.25), JSON to `docs/`,
+   `make_results.py`. Decide: probably `model_real` only (sim vegetation 19 % vs v3's), unless a
+   retrain with a lower `--mix` or fewer iterations keeps sim vegetation. Then update METHOD §7 (the
+   "mixed fine-tune would give one model" bullet).
+2. **Full navigation rerun on the final code** (about 90 min): `bash tools/run_tier_suite.sh 3 1 2 3 4 5`,
+   then the demo world (`nav.launch.py rviz:=false` + `nav_scenarios.py --repeat 3`); the script used is
+   `data/navdbg/full_eval.sh`. Then rewrite METHOD §6 (stress-test paragraph + failure list, still the
+   old 78/90 text) and §7 nav bullets, the "Stress test" row above and the headline numbers.
+   Debug helper: `[ROBOT=ugv] bash data/navdbg/try.sh WORLD REPEAT [SCENARIO]`.
+3. Optional: UGV runs ×3 on all tiers; a 0.1 m costmap near the robot for the UGV's 1.4 m opening.
 
 ## Where things are
 | Thing | Location |
 |---|---|
-| Models | `checkpoints/minkunet.pth` (pretrained, real data); `minkunet_adapt10_v1.pth` (6 worlds), `_v2.pth` (12 worlds + distillation), `_v3.pth` (v2 recipe on corrected labels; **config default**), `minkunet_adapt10.pth` = copy of v2. Training logs `data/finetune_model_v{1,2,3}.log`, histories `checkpoints/minkunet_adapt10_v*.json` |
+| Models | `checkpoints/minkunet.pth` (pretrained, real data); `minkunet_adapt10_v1.pth` (6 worlds), `_v2.pth` (12 worlds + distillation), `_v3.pth` (v2 recipe on corrected labels; **config default**), `_v4.pth` (mixed sim + SemanticPOSS, not yet evaluated), `minkunet_adapt10.pth` = copy of v2. Training logs `data/finetune_model_v{1,2,3,4}.log`, histories `checkpoints/minkunet_adapt10_v*.json` |
 | Sim training data | `data/sim_adapt/sequences/urban_s{11..16,31..36}` (4,139 scans, 11 GB), test `data/sim_adapt_test/sequences/urban_s21` (245) |
 | Real data | `data/real/kitti_raw/2011_09_26/...drive_0005_sync`, `data/real/semanticposs/dataset` |
 | Demo-world eval bag | `data/demo_20261010_212110/bag` |
@@ -65,4 +70,4 @@ separately.
 - **Real data:** KITTI 19 Hz end to end; SemanticPOSS 43.6 mIoU (pretrained, unseen 40-beam
   sensor).
 - **Navigation:** demo world 14/15; stress test over five worlds of rising difficulty 78/90, never
-  driving into a pedestrian. 11.6 min continuous run: no memory growth or slowdown.
+  driving into a pedestrian. Second robot (1.4 m UGV, no retraining): 17/18 runs. 11.6 min continuous run: no memory growth or slowdown.
