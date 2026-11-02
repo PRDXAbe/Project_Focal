@@ -173,7 +173,7 @@ def add_lethal(t, mask):
     return t
 
 
-def plan_cost(t, keepout_cost, nv=None, pose=None, half_l=0.0, half_w=0.0, margin=0.0):
+def plan_cost(t, keepout_cost, nv=None, pose=None, half_l=0.0, half_w=0.0, margin=0.0, min_age=0.0):
     """Costmap for the global planner: people, their keep-out discs and predicted corridors cost
     `keepout_cost` instead of being lethal. They say *when* the robot may pass, not *where*: the controller
     (local costmap, lethal keep-outs) waits for the person, while the planner keeps the route instead of
@@ -184,7 +184,8 @@ def plan_cost(t, keepout_cost, nv=None, pose=None, half_l=0.0, half_w=0.0, margi
         # Lethal cells touching the robot (footprint + margin) make Nav2's planner refuse to start ("starting
         # point in lethal space") until they fade; after a person brushes past, glimpses of them inside the
         # blind disc can take 20 s. The planner gets them as costly; the controller still sees them lethal
-        # and checks the whole footprint before it moves.
+        # and checks the whole footprint before it moves. Only cells not seen for `min_age` s: a parked car
+        # beside the robot stays in view, and relaxing it would let each new plan creep closer into it.
         x, y, yaw = pose
         res, n = nv["resolution"], cost.shape[0]
         ix = torch.arange(n, device=cost.device, dtype=torch.float32)
@@ -192,5 +193,8 @@ def plan_cost(t, keepout_cost, nv=None, pose=None, half_l=0.0, half_w=0.0, margi
         py = (nv["origin"][1] + (ix + 0.5) * res - y)[None, :]
         c, s = math.cos(yaw), math.sin(yaw)
         near = ((c * px + s * py).abs() <= half_l + margin) & ((-s * px + c * py).abs() <= half_w + margin)
-        cost[near & (cost == LETHAL)] = keepout_cost
+        stale = near & (cost == LETHAL)
+        if nv.get("age") is not None:
+            stale &= torch.nan_to_num(nv["age"], nan=float("inf")) >= min_age
+        cost[stale] = keepout_cost
     return cost

@@ -73,6 +73,7 @@ terrain:
   dynamic_margin: {pedestrian: 1.0}  # lethal keep-out radius (m) around these classes (they move; map lags)
   plan_keepout_cost: 90   # people, keep-outs, predicted corridors in /adaptmap/costmap_plan (global planner): costly, not lethal
   plan_free_margin: 0.2   # m around the footprint (one costmap cell) where the planner's costmap is never lethal (the controller's is)
+  plan_free_min_age: 1.0  # s: ... but only for cells not seen since (stale glimpses of a passer-by, not a car still in view)
   trail_length: 10.0      # m of driven footprints counted as known ground (the blind disc never sees them again)
   dynamic_min_height: 0.5 # only cells standing this tall count (a person), not low misclassified clutter
   dynamic_fresh_age: 0.3  # s; only person cells seen this recently get the keep-out (not their fading trail)

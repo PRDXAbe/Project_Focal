@@ -293,7 +293,7 @@ class AdaptMapNode(Node):
                 terrain.known_ground(t_an, nv, self.trail, hl, hw)
             self.pub_cost.publish(costmap_msg(nv, t_an["cost"], header))
             plan = terrain.plan_cost(t_an, tc.get("plan_keepout_cost", 90), nv, (float(t[0]), float(t[1]), yaw), hl, hw,
-                                     tc.get("plan_free_margin", 0.0))
+                                     tc.get("plan_free_margin", 0.0), tc.get("plan_free_min_age", 0.0))
             self.pub_cost_plan.publish(costmap_msg(nv, plan, header))
             tm["costmap"] = time.perf_counter() - t3
             if viz:

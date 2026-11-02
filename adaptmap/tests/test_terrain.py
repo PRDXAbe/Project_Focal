@@ -165,3 +165,7 @@ def test_planner_costmap_never_lethal_touching_the_robot():
     assert at(0.05, 0.45) == 90 and at(0.55, 0.05) == 90                # first cells beside / ahead of the body
     assert at(0.05, 0.75) == terrain.LETHAL and at(1.05, 0.05) == terrain.LETHAL
     assert int(t["cost"][int(5.05 / res), int(5.45 / res)]) == terrain.LETHAL   # controller's costmap unchanged
+    nv["age"] = torch.full((n, n), 5.0)
+    nv["age"][:, int(5.0 / res):] = 0.1                                  # left half (y > 0) still in view
+    plan = terrain.plan_cost(t, 90, nv, (0.0, 0.0, 0.0), 0.495, 0.335, 0.2, 1.0)
+    assert at(0.05, -0.45) == 90 and at(0.05, 0.45) == terrain.LETHAL   # only cells not seen for 1 s relax
