@@ -24,6 +24,24 @@ meaning: nothing says "this dot is road, that dot is a car".
      dots are sparse anyway, it's coarse.
    - This is the "foveated" part, like how your eyes see sharply only where you look.
 
+## The quickest way: the dashboard
+
+```bash
+cd ~/Projects/Project_Focal
+bash tools/dashboard.sh          # or: bash tools/dashboard.sh tier3   (a stress-test world)
+```
+After about a minute your browser opens http://localhost:8080 (Gazebo opens too). One page shows:
+1. **Why a foveated map:** 702,400 cells instead of 16 million, and the four zones around the robot.
+2. **What it sees:** the live map from above. "What it recognises" colours each tile by object type;
+   "What the planner avoids" shows what the robot must not touch. Red arrows are walking people and
+   where AdaptMap predicts they will be in the next 2.5 s.
+3. **It works:** click a scenario. The robot is put at its start and drives itself to the goal; one
+   sentence says what it is doing ("Waiting: a pedestrian's predicted path crosses the route").
+4. **Measured results** from the test runs.
+
+Ctrl-C in the terminal stops everything. Without the simulator (`bash tools/dashboard.sh --offline`)
+the page shows the recorded video and results instead of the live map.
+
 ## What you need
 
 - Everything is installed already (ROS 2, Gazebo, the model).

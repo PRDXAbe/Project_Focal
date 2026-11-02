@@ -36,6 +36,8 @@ The method is described in `docs/METHOD.md`; the numbers are in `docs/RESULTS.md
   - `finetune.py`;
   - evaluations (`eval_bag.py`, `eval_semanticposs.py`, `run_dataset.py`);
   - viewers and videos (`view25d.py`, `render_live.py`, `resolution_figure.py`);
+  - judge dashboard: `dashboard.sh` (sim + Nav2 + page) → `dashboard.py` / `dashboard.html` (Flask,
+    local only, no CDN; `--offline` = recorded results);
   - demo scripts (`manual_test.sh`, `capture_demo.sh`, `stop_demo.sh`);
   - navigation tests: `nav_scenarios.py` (demo world, or `--world tierN`), `make_tier_worlds.py` (five
     test worlds of rising difficulty, scenarios in their manifests), `run_tier_suite.sh` (runs them);

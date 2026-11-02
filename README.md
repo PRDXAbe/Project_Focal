@@ -33,13 +33,13 @@ The method is described in [docs/METHOD.md](docs/METHOD.md) and the measurements
 
 | What | Command |
 |---|---|
+| **Judge dashboard (one page: why, live map, scenario buttons, results)** | `bash tools/dashboard.sh [tierN]`, opens http://localhost:8080; `bash tools/dashboard.sh --offline` for recorded results only |
 | Unit tests | `.venv/bin/python -m pytest adaptmap/tests` (also run by GitHub Actions on every push) |
 | Offline benchmark (no ROS) | `.venv/bin/python tools/benchmark.py --frames 300` (`--speed 8` exercises adaptive zones) |
 | **Manual test (you drive, 3D view)** | `bash tools/manual_test.sh` (+ `--video data/my_drive.mp4 [--color class\|zone\|cost] [--top]`); guide: [docs/TESTING.md](docs/TESTING.md) |
 | Live sim demo | `source ros2_ws/install/setup.bash && ros2 launch adaptmap_ros adaptmap.launch.py [world:=urban_s21.sdf]` |
 | **Autonomous navigation (Nav2)** | `sudo bash scripts/install_nav2.sh` once, then `ros2 launch adaptmap_nav nav.launch.py` and click "2D Goal Pose" in RViz |
 | Navigation scenarios (pass/fail) | with the Nav2 launch running: `.venv/bin/python tools/nav_scenarios.py --repeat 3`, then `python3 tools/make_results.py` |
-| Navigation scenarios (pass/fail) | with nav running: `.venv/bin/python tools/nav_scenarios.py` |
 | Record demo (video + stats + bag) | `bash tools/capture_demo.sh 100 40` (lap seconds, bag seconds; 0 = no bag) |
 | Stop everything | `bash tools/stop_demo.sh` |
 | Gazebo accuracy from a bag | `.venv/bin/python tools/eval_bag.py data/demo_*/bag` |

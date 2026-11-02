@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AdaptMap</title>
+<style>
+  :root {
+    --bg: #0f1116; --panel: #171a21; --panel2: #1e222b; --line: #2a2f3a;
+    --text: #e8eaef; --muted: #9aa1ae; --accent: #50dcff; --good: #5af078; --bad: #ff5a5a; --warn: #f0a030;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Ubuntu, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: .3px; }
+  header .tag { color: var(--muted); }
+  header .badge { margin-left: auto; padding: 4px 12px; border-radius: 99px; font-size: 13px; background: var(--panel2); }
+  .badge.on { color: var(--good); } .badge.off { color: var(--muted); }
+  main { padding: 18px 24px 30px; display: grid; gap: 18px; max-width: 1500px; margin: 0 auto; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  h2 { margin: 0 0 4px; font-size: 18px; }
+  h2 .n { color: var(--accent); margin-right: 8px; }
+  .lead { color: var(--muted); margin: 0 0 14px; }
+  .why { display: grid; grid-template-columns: 1.1fr 1fr; gap: 22px; align-items: start; }
+  .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .card { background: var(--panel2); border-radius: 10px; padding: 12px 14px; }
+  .card .big { font-size: 26px; font-weight: 700; }
+  .card .small { color: var(--muted); font-size: 13px; }
+  .bars { margin-top: 14px; }
+  .bar { display: grid; grid-template-columns: 150px 1fr 110px; gap: 10px; align-items: center; margin: 6px 0; font-size: 13px; }
+  .bar .track { height: 16px; background: var(--panel2); border-radius: 4px; overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 4px; }
+  .zones { display: flex; gap: 18px; align-items: center; }
+  .zones svg { flex: 0 0 300px; max-width: 300px; }
+  .zlegend div { margin: 6px 0; font-size: 13px; }
+  .zlegend b { display: inline-block; width: 58px; }
+  .chips { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; color: var(--muted); }
+  .chip { background: var(--panel2); padding: 3px 10px; border-radius: 99px; }
+  .chip b { color: var(--text); }
+  .live { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 18px; }
+  .view { position: relative; }
+  .view img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #12141a; border-radius: 10px; display: block; }
+  .view video { width: 100%; background: #12141a; border-radius: 10px; display: block; }
+  [hidden] { display: none !important; }
+  .toggle { display: inline-flex; background: var(--panel2); border-radius: 8px; padding: 3px; margin-bottom: 10px; }
+  .toggle button { background: none; border: 0; color: var(--muted); padding: 6px 14px; border-radius: 6px; cursor: pointer; font: inherit; }
+  .toggle button.sel { background: var(--line); color: var(--text); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .caption { font-size: 18px; font-weight: 600; min-height: 54px; padding: 12px 14px; background: var(--panel2);
+             border-left: 4px solid var(--accent); border-radius: 6px; margin-bottom: 12px; }
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .metrics div { background: var(--panel2); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--muted); }
+  .metrics b { display: block; font-size: 18px; color: var(--text); }
+  .sc { display: grid; gap: 8px; }
+  .sc button { text-align: left; background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+               border-radius: 8px; padding: 9px 12px; cursor: pointer; font: inherit; }
+  .sc button:hover:not(:disabled) { border-color: var(--accent); }
+  .sc button:disabled { opacity: .5; cursor: default; }
+  .sc button.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .sc .t { font-weight: 600; } .sc .d { color: var(--muted); font-size: 13px; }
+  .sc .h { float: right; font-size: 12px; color: var(--muted); }
+  .stop { margin-top: 10px; width: 100%; background: #3a1d22; color: #ffb4b4; border: 1px solid #5a2a30;
+          border-radius: 8px; padding: 8px; cursor: pointer; font: inherit; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { color: var(--muted); font-weight: 500; }
+  .pass { color: var(--good); font-weight: 700; } .fail { color: var(--bad); font-weight: 700; }
+  .results { display: grid; grid-template-columns: 1.2fr 1fr; gap: 22px; }
+  .mini { height: 8px; background: var(--panel2); border-radius: 4px; overflow: hidden; width: 120px; display: inline-block; vertical-align: middle; margin-left: 8px; }
+  .mini span { display: block; height: 100%; background: var(--good); }
+  @media (max-width: 1100px) { .why, .live, .results { grid-template-columns: 1fr; } }
+  @media (max-width: 600px) {
+    main { padding: 12px 16px; } header { padding: 12px 16px; flex-wrap: wrap; }
+    .cards { grid-template-columns: 1fr; } .zones { flex-direction: column; } .bar { grid-template-columns: 90px 1fr 70px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>AdaptMap</h1>
+  <span class="tag">Sharp where it matters: a foveated 2.5D LiDAR map for robots that drive among people</span>
+  <span id="badge" class="badge off">connecting…</span>
+</header>
+<main>
+  <section>
+    <h2><span class="n">1</span>Why a foveated map?</h2>
+    <p class="lead">A robot needs fine detail close by, where it can collide, and only a coarse picture far away.
+      AdaptMap keeps 5 cm cells near the robot and coarser ones further out, like the human eye's fovea.</p>
+    <div class="why">
+      <div>
+        <div class="cards" id="cards"></div>
+        <div class="bars" id="bars"></div>
+      </div>
+      <div>
+        <div class="zones">
+          <svg id="zsvg" viewBox="0 0 300 300" role="img" aria-label="nested map zones"></svg>
+          <div class="zlegend" id="zlegend"></div>
+        </div>
+        <div class="chips" id="adaptive"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="live">
+      <div>
+        <h2><span class="n">2</span>What it sees</h2>
+        <p class="lead" id="seelead">Live top-down map around the robot (white). Each zone is drawn at its own cell size.</p>
+        <div class="toggle" id="viewtoggle">
+          <button data-v="map" class="sel">What it recognises</button>
+          <button data-v="planner">What the planner avoids</button>
+        </div>
+        <div class="view" id="view"></div>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div>
+        <h2><span class="n">3</span>It works</h2>
+        <p class="lead">Pick a scenario: the robot is placed at its start and Nav2 drives it to the goal on the AdaptMap costmap.</p>
+        <div class="caption" id="caption">…</div>
+        <div class="metrics" id="metrics"></div>
+        <div class="sc" id="sc"></div>
+        <button class="stop" id="stop" hidden>Stop the scenario</button>
+        <div id="session" class="lead" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">4</span>Measured results</h2>
+    <p class="lead">Every number comes from the evaluation tools' output in <code>docs/*.json</code>.</p>
+    <div class="results">
+      <div><table id="navtable"></table></div>
+      <div><table id="segtable"></table></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => n.toLocaleString("en-US");
+let S = null, view = "map", connected = null;
+
+function el(tag, attrs = {}, html = "") {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  e.innerHTML = html; return e;
+}
+
+function why() {
+  const m = S.map, seg = S.segmentation;
+  const cards = [
+    [fmt(m.cells), `map cells, vs ${fmt(m.uniform_cells)} for a uniform 5 cm map (${m.reduction}× fewer)`],
+    [`${m.mem_ratio}× less`, `memory: ${m.mem_mb[0]} MB instead of ${m.mem_mb[1]} MB`],
+    [`${m.hz} scans/s`, `full pipeline on a laptop GPU (${m.pipeline_ms} ms per scan); map update ${m.fuse_speedup}× faster`],
+    seg.test_world ? [`${seg.test_world.finetuned} %`, `segmentation accuracy (mIoU) on an unseen test world, up from ${seg.test_world.pretrained} %`] : null,
+  ].filter(Boolean);
+  $("cards").replaceChildren(...cards.map(([b, s]) => el("div", {class: "card"}, `<div class="big">${b}</div><div class="small">${s}</div>`)));
+  const max = m.uniform_cells;
+  $("bars").replaceChildren(
+    ...[["Uniform 5 cm map", m.uniform_cells, "#6b7280"], ["AdaptMap", m.cells, "var(--accent)"]].map(([l, v, c]) =>
+      el("div", {class: "bar"}, `<span>${l}</span><div class="track"><div class="fill" style="width:${Math.max(100 * v / max, .8)}%;background:${c}"></div></div><span>${fmt(v)} cells</span>`)));
+
+  // nested zones, outer 100 m; inner pattern spacing illustrates relative cell size
+  const z = S.zones, R = z[z.length - 1].half, sc = 145 / R, cols = ["#50dcff", "#4aa8d8", "#3f78a8", "#33507a"];
+  let svg = "<defs>";
+  z.forEach((q, i) => {
+    const s = Math.max(2, q.cell * 22);
+    svg += `<pattern id="p${i}" width="${s}" height="${s}" patternUnits="userSpaceOnUse"><path d="M ${s} 0 L 0 0 0 ${s}" fill="none" stroke="${cols[i]}" stroke-opacity=".55" stroke-width=".6"/></pattern>`;
+  });
+  svg += "</defs>";
+  [...z].reverse().forEach((q, k) => {
+    const i = z.length - 1 - k, h = q.half * sc;
+    svg += `<rect x="${150 - h}" y="${150 - h}" width="${2 * h}" height="${2 * h}" fill="#171a21"/>`;
+    svg += `<rect x="${150 - h}" y="${150 - h}" width="${2 * h}" height="${2 * h}" fill="url(#p${i})" stroke="${cols[i]}" stroke-width="1.5"/>`;
+  });
+  svg += `<rect x="147" y="146" width="6" height="8" fill="#fff"/>`;
+  $("zsvg").innerHTML = svg;
+  $("zlegend").replaceChildren(el("div", {}, "<span style='color:var(--muted)'>Zone around the robot</span>"),
+    ...z.map((q, i) => el("div", {}, `<b style="color:${cols[i]}">${Math.round(q.cell * 100)} cm</b> up to ${q.half} m &nbsp;<span style="color:var(--muted)">${q.cells ? fmt(q.cells) + " cells" : ""}</span>`)));
+  if (S.adaptive) $("adaptive").replaceChildren(el("span", {}, "Faster driving → larger sharp zone:"),
+    ...S.adaptive.map(a => el("span", {class: "chip"}, `<b>${a.speed} m/s</b> → 5 cm up to ${a.radius} m`)));
+}
+
+function legend() {
+  const items = view === "map"
+    ? S.classes.map(c => [`rgb(${c.rgb})`, c.name])
+    : [["#2e343c", "free to drive"], ["#a07832", "costly: grass, slopes, close to obstacles"], ["#eb4040", "lethal: obstacle, curb or a pedestrian's predicted path"]];
+  $("legend").replaceChildren(...items.map(([c, n]) => el("span", {}, `<i style="background:${c}"></i>${n}`)),
+    el("span", {}, `<i style="background:#50dcff"></i>planned path`), el("span", {}, `<i style="background:#ff5a5a;border-radius:50%"></i>pedestrian + predicted 2.5 s path`));
+}
+
+function setView() {
+  const box = $("view");
+  if (connected) {
+    box.replaceChildren(el("img", {src: `/stream/${view}.mjpg`, alt: "live top-down map"}));
+    $("viewtoggle").hidden = $("legend").hidden = false;
+    $("seelead").textContent = view === "map"
+      ? "Live top-down map around the robot (white), coloured by what the network recognised. Each zone is drawn at its own cell size."
+      : "The same map as the planner sees it: what the robot must avoid, including where walking people are about to be.";
+  } else {
+    $("viewtoggle").hidden = $("legend").hidden = true;
+    $("seelead").textContent = "Simulator not running: recorded demo. Start it with tools/dashboard.sh to see the live map.";
+    const v = S.videos[0];
+    box.replaceChildren(v ? el("video", {src: `/media/${v}`, controls: "", muted: "", loop: "", autoplay: "", playsinline: ""})
+                          : el("img", {src: "/media/nav_demo.png", alt: "recorded demo frame"}));
+  }
+  legend();
+}
+
+function scenarios() {
+  $("sc").replaceChildren(...S.scenarios.map(s => {
+    const [p, n] = s.history;
+    const b = el("button", {"data-name": s.name},
+      `<span class="h">${n ? `recorded ${p}/${n}` : ""}</span><div class="t">${s.name.replaceAll("_", " ")}</div><div class="d">${s.description}${s.expect === "refuse" ? " (should refuse)" : ""}</div>`);
+    b.onclick = async () => {
+      const r = await fetch(`/api/run/${s.name}`, {method: "POST"});
+      if (!r.ok) $("caption").textContent = (await r.json()).error;
+    };
+    return b;
+  }));
+}
+
+function results() {
+  const nav = S.nav;
+  const tot = nav.filter(r => r.world.startsWith("tier")), ok = tot.reduce((a, r) => a + r.passed, 0), n = tot.reduce((a, r) => a + r.runs, 0);
+  const hits = nav.reduce((a, r) => a + r.ped_hits, 0);
+  $("navtable").innerHTML = `<tr><th>Navigation (Nav2 on the AdaptMap costmap)</th><th>Runs passed</th></tr>` +
+    nav.map(r => `<tr><td>${r.title}</td><td>${r.passed}/${r.runs}<span class="mini"><span style="width:${100 * r.passed / r.runs}%"></span></span></td></tr>`).join("") +
+    (tot.length ? `<tr><td><b>Stress test, ${tot.length} worlds of rising difficulty</b></td><td><b>${ok}/${n}</b></td></tr>` : "") +
+    `<tr><td>Runs that drove into a pedestrian</td><td class="${hits ? "fail" : "pass"}">${hits}</td></tr>` +
+    (S.soak ? `<tr><td>${S.soak.minutes} min continuous driving</td><td>memory +${S.soak.rss_growth_mb} MB, no slowdown</td></tr>` : "");
+  const seg = S.segmentation, rows = [];
+  if (seg.test_world) rows.push(["Unseen simulated test world", `${seg.test_world.pretrained} → <b>${seg.test_world.finetuned}</b> % mIoU`]);
+  if (seg.demo_world) rows.push(["Demo world", `${seg.demo_world.pretrained} → <b>${seg.demo_world.finetuned}</b> % mIoU`]);
+  if (seg.semanticposs_pretrained) rows.push(["Real LiDAR (SemanticPOSS, unseen sensor)", `<b>${seg.semanticposs_pretrained}</b> % mIoU`]);
+  if (S.kitti) rows.push(["Real KITTI drive, full pipeline", `<b>${S.kitti.hz} scans/s</b> (${S.kitti.ms} ms)`]);
+  $("segtable").innerHTML = `<tr><th>Perception</th><th>Result</th></tr>` + rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
+}
+
+async function tick() {
+  let L;
+  try { L = await (await fetch("/api/live")).json(); } catch { L = {connected: false, caption: "Dashboard server stopped.", scenario: {}, session: []}; }
+  if (L.connected !== connected) { connected = L.connected; setView(); }
+  $("badge").className = "badge " + (L.connected ? "on" : "off");
+  $("badge").textContent = L.connected ? `● live: ${S.world === "urban" ? "demo world" : S.world}` : "● recorded";
+  $("caption").textContent = L.caption;
+  const sc = L.scenario || {}, p = sc.progress || {}, running = ["placing", "running"].includes(sc.phase);
+  const m = L.connected ? [
+    ["speed", `${L.speed.toFixed(1)} m/s`], ["scans / s", L.scans_per_s], ["pipeline", `${Math.round(L.pipeline_ms)} ms`],
+    ["5 cm zone", `${L.near_radius.toFixed(1)} m`], ["walking people", L.walking],
+    running ? ["driven", `${(p.distance_m || 0).toFixed(1)} m`] : ["cells observed", fmt(L.observed)],
+  ] : [];
+  $("metrics").replaceChildren(...m.map(([k, v]) => el("div", {}, `<b>${v}</b>${k}`)));
+  document.querySelectorAll("#sc button").forEach(b => {
+    b.disabled = !L.connected || running;
+    b.classList.toggle("active", b.dataset.name === sc.name && sc.phase !== "idle");
+  });
+  $("stop").hidden = !running;
+  const ses = L.session || [];
+  $("session").innerHTML = ses.length ? `This session: ${ses.filter(r => r.passed).length}/${ses.length} passed · ` +
+    ses.slice(-6).map(r => `<span class="${r.passed ? "pass" : "fail"}">${r.scenario.replaceAll("_", " ")}</span>`).join(", ") : "";
+}
+
+$("stop").onclick = () => fetch("/api/stop", {method: "POST"});
+document.querySelectorAll("#viewtoggle button").forEach(b => b.onclick = () => {
+  view = b.dataset.v;
+  document.querySelectorAll("#viewtoggle button").forEach(x => x.classList.toggle("sel", x === b));
+  setView();
+});
+
+(async () => {
+  S = await (await fetch("/api/summary")).json();
+  why(); scenarios(); results();
+  await tick();
+  setInterval(tick, 700);
+})();
+</script>
+</body>
+</html>

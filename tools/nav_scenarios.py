@@ -88,6 +88,7 @@ class Runner(Node):
         self.pose, self.yaw, self.speed, self.stamp = None, 0.0, 0.0, 0.0
         self.create_subscription(Odometry, "/odom", self.on_odom, 10)
         self.client = ActionClient(self, NavigateToPose, "navigate_to_pose")
+        self.abort = False   # set from another thread (tools/dashboard.py) to cancel the running scenario
 
     def on_odom(self, m):
         p, q = m.pose.pose.position, m.pose.pose.orientation
@@ -111,7 +112,9 @@ class Runner(Node):
         if math.hypot(self.pose[0] - x, self.pose[1] - y) > 0.5:
             raise RuntimeError(f"rover not at start ({x}, {y}): odometry says {self.pose}")
 
-    def run(self, name, gx, gy, expect, limit, stat, acts, road_half=ROAD_HALF):
+    def run(self, name, gx, gy, expect, limit, stat, acts, road_half=ROAD_HALF, progress=None):
+        """progress: optional callback, called each loop with the live metrics (tools/dashboard.py)."""
+        self.abort = False
         goal = NavigateToPose.Goal()
         goal.pose.header.frame_id = "odom"
         goal.pose.header.stamp = self.get_clock().now().to_msg()
@@ -128,7 +131,7 @@ class Runner(Node):
         status = GoalStatus.STATUS_UNKNOWN  # goal rejected
         if handle.accepted:
             res = handle.get_result_async()
-            while not res.done() and time.time() - t0 < limit:
+            while not res.done() and time.time() - t0 < limit and not self.abort:
                 rclpy.spin_once(self, timeout_sec=0.05)
                 x, y = self.pose
                 dist += math.hypot(x - last[0], y - last[1])
@@ -149,6 +152,9 @@ class Runner(Node):
                         d = min(math.hypot(px - ax, py - ay) for px, py in fp) - PED_RADIUS
                         if d < min_ped:
                             min_ped, ped_speed, ped_name = d, self.speed, a["name"]
+                if progress:
+                    progress({"elapsed_s": time.time() - t0, "distance_m": dist, "speed": self.speed,
+                              "min_static_m": min_static, "min_ped_m": min_ped, "left_road": left_road})
             if res.done():
                 status = res.result().status
             else:

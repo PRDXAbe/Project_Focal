@@ -1,4 +1,4 @@
-# Project status, last updated 2026-10-18
+# Project status, last updated 2026-11-02
 
 ## ▶ Resume here (new conversation)
 These two files (`CLAUDE.md` + this one) are the full context. **Don't re-explore the codebase or
@@ -6,7 +6,7 @@ re-run old benchmarks.** Everything below is verified, committed and pushed (wor
 after the P5 commit).
 
 To start the next session:
-1. Continue with **"Not done", item 1** below (the UI), then the optional items.
+1. Continue with **"Not done"** below (all optional).
 2. After each item: run `pytest`, write the result JSON to `docs/`, run `python3 tools/make_results.py`,
    update this file, then commit and push. Author PRDXAbe, **no AI attribution**.
 3. Running the Nav2 stack: `ros2 launch adaptmap_nav nav.launch.py rviz:=false`; scenarios:
@@ -29,22 +29,20 @@ separately.
 | P7 | Speed-adaptive zones (`set_zones`, `ZonePolicy`) | 5 cm zone 10 m → 15.5 m @ 5 m/s → 25 m @ 8 m/s (1.33 M cells) |
 | P8 (part) | CI (GitHub Actions, CPU pytest), launch_testing smoke test (3/3 pass), `make_results.py`, README/METHOD/TESTING updates | |
 | P4 follow-up | "v2 only 46 % on world-21 vehicles" was a **label bug**: `tools/fix_labels.py` relabelled whole car sides as road wherever no ground was visible within 1 m (next to the robot, inside the LiDAR blind disc; `gz = inf` made every point "low"). Fixed with a test, labels regenerated from `labels_raw` for s11–s16 and s21 (≈80 % fewer relabelled points; the rest are at ground level). New `tools/eval_sim_test.py` → `docs/eval_world21.json` (all 245 scans) | world 21: v2 **88.4** mIoU, vehicle **93 %** (was reported 73.8 / 46 %); v1 79.0 / 48 % (it was trained only on the corrupted worlds). v2 is best on both held-out worlds |
-| v3 retrain | v2 recipe on the corrected labels (`checkpoints/minkunet_adapt10_v3.pth`, log `data/finetune_model_v3.log`). `tools/finetune.py` now starts from `model_real` (it crashed starting from the 10-class default) | world 21 **89.6** (v2 88.4), demo world 90.4 (v2 90.2), but demo pedestrians 78 vs 80 %: **v2 stays the default** (navigation validated with it) |
+| v3 retrain | v2 recipe on the corrected labels (`checkpoints/minkunet_adapt10_v3.pth`, log `data/finetune_model_v3.log`). `tools/finetune.py` now starts from `model_real` (it crashed starting from the 10-class default) | world 21 **89.6** (v2 88.4), demo world 90.4 (v2 90.2), but demo pedestrians 78 vs 80 %: v2 stayed the default at first; the stress test then made **v3 the default** (see below) |
 | Housekeeping | Reviewed `data/demo_*`; five unused runs deleted 2026-10-14 (user OK). Kept `data/demo_20261010_212110/bag` (demo-world evaluation set) and `data/demo_20261012_222528` (source of `docs/live_summary.json`) | |
 | Stress test | Five test worlds of rising difficulty (`tools/make_tier_worlds.py`, 30 scenarios, geometry self-check) run by `tools/run_tier_suite.sh`. Fixes it forced: **one-sided step rule** (walls grew a lethal 0.2 m fringe: a 1.4 m opening looked 0.9 m), **robot_height 1.85 m** (incl. LiDAR mast; a 1.3 m bar was "passable"), **default model v3** (v2 called a car's side road from beside it → froze in an empty lane), Nav2 global window 260 m (a goal outside it came back as a false *success*). 11.6 min soak: no leak, no slowdown | **78/90** (tiers 15/15, 13/15, 16/18, 24/24, 10/18), **0 runs drove into a pedestrian**; demo world 14/15 with v3. Failures: stuck after yielding in a tight corridor (6), yields on the crossing line (2+1 demo), touched a 25 cm crate (2) / parked car (1) in the narrow street, over-cautious with a runner (1) |
 | P5 | Nav2 on the AdaptMap costmap (SmacPlanner2D + RegulatedPurePursuit), 5 scripted scenarios run 3× each. New method parts: *appearance* (a new obstacle replaces a cell in one scan instead of being averaged in over ~1 s), ground clearing, 1 m pedestrian keep-out, **motion-aware keep-out** (`adaptmap/motion.py`: pedestrian tracks → lethal corridor of the next 2.5 s, measured from the blob's front edge), footprint clearing (map + published costmap never lethal under the rover), costmap every scan | **15/15 runs pass** (`docs/nav_results.json`); 31 tests. Video `docs/figures/nav_demo.mp4` (local, choppy 1.3 fps: sim + renderer share the GPU; re-record with `--top` if needed). Known limitation: the rover sometimes yields *on* the crossing line instead of before it; a Gazebo actor then walks into the stopped rover (footnote in RESULTS) |
+| Judge UI | `bash tools/dashboard.sh [tierN]` → local page (`tools/dashboard.py` + `.html`, Flask, no CDN): why (cells, zones, adaptive zones from `docs/*.json`), live top-down map (semantic / planner view, Nav2 path, pedestrians + predicted 2.5 s corridor), scenario buttons with live captions and a Stop button, measured results; `--offline` shows recorded video + results. `nav_scenarios.Runner.run` got a `progress` callback and an `abort` flag | Verified live in the demo world: pedestrian_crossing and around_lane_car passed from the page, curb goal correctly refused, Stop works |
 
 ### Not done ⬜ (next steps, in order)
-1. **Judge-facing UI** (user's next request): one clear dashboard that tells the story: the "why"
-   (702 k vs 16 M cells, tile zones), "what it sees" (clean top-down map, predicted pedestrian paths),
-   "it works" (robot driving with plain captions, pass counts from RESULTS), scenario buttons.
-2. **Optional navigation improvements** found by the stress test (all Nav2/behaviour, not the map):
+1. **Optional navigation improvements** found by the stress test (all Nav2/behaviour, not the map):
    move off again after yielding in tight corridors (RPP collision look-ahead / recovery tuning);
    stop *before* a crossing line; less conservative corridor for fast runners; check whether the
    25 cm crate contact is the planner or the crate fading inside the blind disc.
-3. **Real-data accuracy (optional).** Fine-tune on mixed sim + SemanticPOSS sequences 00–04 with
+2. **Real-data accuracy (optional).** Fine-tune on mixed sim + SemanticPOSS sequences 00–04 with
    intensity dropout, testing on 05: one model for sim and real data.
-4. **P9 (optional).** A bigger robot (Husky / Go2): extrinsics (`lidar_offset`), topics, footprint,
+3. **P9 (optional).** A bigger robot (Husky / Go2): extrinsics (`lidar_offset`), topics, footprint,
    `terrain.robot_height`.
 
 ## Where things are
