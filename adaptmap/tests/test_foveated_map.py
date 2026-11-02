@@ -83,6 +83,29 @@ def test_dynamic_cells_fade_static_persist():
     assert v["valid"][wi, wj]              # wall remembered (tau 20 s)
 
 
+def test_mixed_class_cell_decays_at_expected_rate():
+    """A cell that is half pedestrian, half pole (a person half-recognised next to the robot) fades like a
+    person, not like a pole: the decay rate is the expectation over the class probabilities."""
+    m = make_map()
+    half = 0.5 * (one_hot(1, "pedestrian") + one_hot(1, "pole")) + torch.tensor([[0.0] * 6 + [0.01] + [0.0] * 3])
+    pole = one_hot(1, "pole")
+    m.integrate(torch.tensor([[3.0, 3.0, 1.0], [-3.0, -3.0, 1.0]]), torch.cat([half, pole]), [0, 0], 0.0)
+    assert m.layer_view(m.layers[0])["class"][int(13 / 0.05), int(13 / 0.05)] == classes.NAMES.index("pole")
+    m.integrate(torch.zeros(0, 3), torch.zeros(0, classes.NUM_CLASSES), [0, 0], 4.0)  # 4 s, nothing seen
+    v = m.layer_view(m.layers[0])
+    assert not v["valid"][int(13 / 0.05), int(13 / 0.05)]   # but it fades: rate 0.5 / 0.5 s + 0.5 / 20 s
+    assert v["valid"][int(7 / 0.05), int(7 / 0.05)]         # a real pole stays
+
+
+def test_age_view_counts_seconds_since_seen():
+    m = make_map()
+    m.integrate(torch.tensor([[3.0, 3.0, 1.0]]), one_hot(1, "building_wall"), [0, 0], 1.7e9)   # ROS epoch stamp
+    m.integrate(torch.tensor([[-3.0, -3.0, 1.0]]), one_hot(1, "building_wall"), [0, 0], 1.7e9 + 1.5)
+    v = m.layer_view(m.layers[0])
+    assert v["age"][int(13 / 0.05), int(13 / 0.05)].item() == pytest.approx(1.5, abs=1e-3)
+    assert v["age"][int(7 / 0.05), int(7 / 0.05)].item() == pytest.approx(0.0, abs=1e-3)
+
+
 def test_rolling_keeps_world_position():
     m = make_map()
     m.integrate(torch.tensor([[2.0, 1.0, 0.7]]), one_hot(1, "pole"), [0, 0], 0.0)

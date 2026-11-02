@@ -100,17 +100,30 @@ def analyze(nv, cfg):
         lethal |= curb
     # class-aware keep-out: people move, and the map reaches the planner ~0.5 s late, so a cell that is a
     # standing pedestrian blocks a disc around it (walking distance during that delay + personal space)
+    # Only cells seen in the last `dynamic_fresh_age` s seed it (and the motion tracker): a walking person
+    # leaves cells behind that take ~2 s to fade where the ground behind them isn't visible (next to the
+    # robot, in the LiDAR's blind disc); a disc around that trail blocks a band ~2.5 m long per walker.
     dynamic = torch.zeros_like(obstacle)
+    people = torch.zeros_like(obstacle)
+    keepout = torch.zeros_like(obstacle)
+    age = nv.get("age")
+    fresh = torch.ones_like(obstacle) if age is None else \
+        torch.nan_to_num(age, nan=float("inf")) <= cfg.get("dynamic_fresh_age", 0.3)
     for name, radius in cfg.get("dynamic_margin", {}).items():
         person = obstacle & (cls == names.index(name)) & (hag > cfg.get("dynamic_min_height", 0.5))
-        if person.any():
-            lethal |= _disc_dilate(person, radius / res)
-            dynamic |= person
+        people |= person
+        if (person & fresh).any():
+            keepout |= _disc_dilate(person & fresh, radius / res)
+            dynamic |= person & fresh
+    # people (incl. their fading trail) and margins; obstacles, curbs and steps underneath stay lethal for
+    # the planner too
+    keepout = (keepout | people) & ~(lethal & ~people)
+    lethal |= keepout
     cost = torch.where(lethal, torch.full_like(cost, LETHAL), cost)
     cost = torch.where(known, cost.round(), torch.full_like(cost, UNKNOWN)).to(torch.int8)
     return {"slope_deg": slope, "step": step, "roughness": rough, "curb": curb,
             "passable_under": passable_under, "obstacle": obstacle, "dynamic": dynamic,
-            "cost": cost}
+            "keepout": keepout & known, "cost": cost}
 
 
 def free_footprint(t, nv, xy, yaw, half_l, half_w):
@@ -128,7 +141,56 @@ def free_footprint(t, nv, xy, yaw, half_l, half_w):
     return t
 
 
+def known_ground(t, nv, poses, half_l, half_w):
+    """Cells the robot has stood on (its footprint at each pose) are traversable ground. The LiDAR's blind
+    disc never sees them again once the robot is there, so they would otherwise stay unknown; Nav2's
+    recoveries (backup, spin) treat unknown as a collision and abort. Only unknown cells are filled in:
+    anything observed since (e.g. a person walking behind the robot) keeps its cost."""
+    cost, res = t["cost"], nv["resolution"]
+    n = cost.shape[0]
+    ix = torch.arange(n, device=cost.device, dtype=torch.float32)
+    cx = nv["origin"][0] + (ix + 0.5) * res
+    cy = nv["origin"][1] + (ix + 0.5) * res
+    unknown = cost == UNKNOWN
+    for x, y, yaw in poses:
+        i0, i1 = max(0, int((x - 1.0 - nv["origin"][0]) / res)), min(n, int((x + 1.0 - nv["origin"][0]) / res) + 1)
+        j0, j1 = max(0, int((y - 1.0 - nv["origin"][1]) / res)), min(n, int((y + 1.0 - nv["origin"][1]) / res) + 1)
+        if i0 >= i1 or j0 >= j1:
+            continue
+        px, py = (cx[i0:i1] - x)[:, None], (cy[j0:j1] - y)[None, :]
+        c, s = math.cos(yaw), math.sin(yaw)
+        inside = ((c * px + s * py).abs() <= half_l) & ((-s * px + c * py).abs() <= half_w)
+        win = cost[i0:i1, j0:j1]
+        win[inside & unknown[i0:i1, j0:j1]] = 0
+    return t
+
+
 def add_lethal(t, mask):
-    """Mark extra cells lethal (e.g. MotionPredictor corridors), in place on analyze()'s output."""
+    """Mark extra cells lethal (e.g. MotionPredictor corridors), in place on analyze()'s output. Cells that
+    were not lethal already join the keep-out mask (see plan_cost)."""
+    t["keepout"] |= mask & (t["cost"] != LETHAL) & (t["cost"] != UNKNOWN)
     t["cost"][mask] = LETHAL
     return t
+
+
+def plan_cost(t, keepout_cost, nv=None, pose=None, half_l=0.0, half_w=0.0, margin=0.0):
+    """Costmap for the global planner: people, their keep-out discs and predicted corridors cost
+    `keepout_cost` instead of being lethal. They say *when* the robot may pass, not *where*: the controller
+    (local costmap, lethal keep-outs) waits for the person, while the planner keeps the route instead of
+    detouring around every crossing group, e.g. through a gap in a curb or onto the sidewalk."""
+    cost = t["cost"].clone()
+    cost[t["keepout"] & (cost == LETHAL)] = keepout_cost
+    if pose is not None and margin > 0:
+        # Lethal cells touching the robot (footprint + margin) make Nav2's planner refuse to start ("starting
+        # point in lethal space") until they fade; after a person brushes past, glimpses of them inside the
+        # blind disc can take 20 s. The planner gets them as costly; the controller still sees them lethal
+        # and checks the whole footprint before it moves.
+        x, y, yaw = pose
+        res, n = nv["resolution"], cost.shape[0]
+        ix = torch.arange(n, device=cost.device, dtype=torch.float32)
+        px = (nv["origin"][0] + (ix + 0.5) * res - x)[:, None]
+        py = (nv["origin"][1] + (ix + 0.5) * res - y)[None, :]
+        c, s = math.cos(yaw), math.sin(yaw)
+        near = ((c * px + s * py).abs() <= half_l + margin) & ((-s * px + c * py).abs() <= half_w + margin)
+        cost[near & (cost == LETHAL)] = keepout_cost
+    return cost

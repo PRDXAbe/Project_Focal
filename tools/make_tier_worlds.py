@@ -22,6 +22,7 @@ import make_world as mw
 
 WALK_W, CURB_H = mw.WALK_W, mw.CURB_H
 ROBOT_TOP = 1.8  # LiDAR on its mast (the sim model's mast has no collision, the real robot's would)
+LIDAR_Z, LIDAR_MIN_ELEV = 1.73, 0.4329  # sensor height (m) and lowest beam below horizontal (rad), rover model.sdf
 
 
 def street(seed, road_w, x0, x1, trees=4):
@@ -172,7 +173,7 @@ def tier5():
         sc("occluded_walker", (5, 0.0, 0), (35, 0.0), "reach", 90, "a person steps out from behind a parked car at x = 26.5"),
         sc("chicane", (32, 0.0, 0), (55, 0.0), "reach", 80, "crates force an S-bend at x = 40 and 47"),
         sc("group_crossing", (50, 0.0, 0), (72, 0.0), "reach", 90, "three people cross together at x = 59-62"),
-        sc("head_on_narrow", (72, 0.0, 0), (99, 0.0), "reach", 100, "a person walks down the single lane; a 25 cm crate at x = 75"),
+        sc("head_on_narrow", (66, 0.0, 0), (99, 0.0), "reach", 100, "a person walks down the single lane; a 25 cm crate at x = 75"),
         sc("stopper", (98, 0.0, 0), (116, 0.0), "reach", 90, "a person stops 5 s in the lane at x = 108"),
         sc("full_run", (0, 0.0, 0), (125, 0.0), "reach", 300, "125 m through all of the above"),
     ]
@@ -180,7 +181,8 @@ def tier5():
 
 def check(objs, road_half, scenarios, res=0.1, half_w=0.335, step=0.12):
     """Static sanity check of each scenario on a 10 cm grid: the start pose is free, and a path for a robot
-    `half_w` wide that stays on the road exists for 'reach' goals and does not for 'refuse' goals.
+    `half_w` wide that stays on the road exists for 'reach' goals and does not for 'refuse' goals, and no
+    obstacle lower than the LiDAR sits entirely inside its blind disc at the start pose (never visible).
     Pedestrians are ignored; obstacles count when they reach above `step` and start below ROBOT_TOP."""
     import numpy as np
     from scipy import ndimage
@@ -189,6 +191,7 @@ def check(objs, road_half, scenarios, res=0.1, half_w=0.335, step=0.12):
     nx, ny = int(road["size"][0] / res), int(2 * road_half / res)
     X, Y = np.meshgrid(x0 + (np.arange(nx) + 0.5) * res, -road_half + (np.arange(ny) + 0.5) * res, indexing="ij")
     occ = np.zeros((nx, ny), bool)
+    blind = []   # obstacles lower than the LiDAR: invisible from closer than (LIDAR_Z - top) / tan(lowest beam)
     for o in objs:
         if o["type"] == "actor" or o["class"] in ("road", "sidewalk_curb", "terrain"):
             continue
@@ -198,6 +201,9 @@ def check(objs, road_half, scenarios, res=0.1, half_w=0.335, step=0.12):
             continue
         c, s_ = math.cos(yaw), math.sin(yaw)
         occ |= (abs(c * (X - cx) + s_ * (Y - cy)) <= sx / 2) & (abs(-s_ * (X - cx) + c * (Y - cy)) <= sy / 2)
+        if cz + sz / 2 < LIDAR_Z:
+            corners = [(cx + c * a - s_ * b, cy + s_ * a + c * b) for a in (-sx / 2, sx / 2) for b in (-sy / 2, sy / 2)]
+            blind.append({"name": o["name"], "top": cz + sz / 2, "corners": corners})
     k = int(math.ceil(half_w / res))
     d = np.arange(-k, k + 1)
     blocked = ndimage.binary_dilation(occ, (d[:, None] ** 2 + d[None] ** 2) * res * res <= half_w ** 2)
@@ -215,6 +221,10 @@ def check(objs, road_half, scenarios, res=0.1, half_w=0.335, step=0.12):
             path = False
         if not free or path != (c["expect"] == "reach"):
             bad.append(f"{c['name']}: start free {free}, path exists {path}, expected {c['expect']}")
+        for o in blind:   # placed (teleported) next to an obstacle it can never see
+            d = max(math.hypot(px - sx_, py - sy_) for px, py in o["corners"])
+            if d < (LIDAR_Z - o["top"]) / math.tan(LIDAR_MIN_ELEV) + 0.5:   # a sliver on the lowest ring is not enough
+                bad.append(f"{c['name']}: {o['name']} ({o['top']:.2f} m tall) lies inside the LiDAR's blind disc at the start")
     return bad
 
 

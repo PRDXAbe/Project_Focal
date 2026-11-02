@@ -14,6 +14,7 @@ Publishes
 """
 import array
 import json
+import math
 import queue
 import os
 import sys
@@ -106,9 +107,8 @@ def grid_map_msg(view, name, header):
     return gridmap_from_layers(layers, view["origin"], view["resolution"], header)
 
 
-def costmap_msg(nv, t, header):
-    """Nav2-ready costmap (OccupancyGrid)."""
-    cost = t["cost"]
+def costmap_msg(nv, cost, header):
+    """Nav2-ready costmap (OccupancyGrid) from an (n, n) int8 cost grid."""
     g = OccupancyGrid(header=header)
     n = cost.shape[0]
     g.info.resolution = float(nv["resolution"])
@@ -178,6 +178,8 @@ class AdaptMapNode(Node):
         self.speed = 0.0
         mc = self.cfg["terrain"].get("motion", {})
         self.motion = MotionPredictor(mc) if mc.get("enabled") else None
+        # footprints along the last few metres driven (terrain.known_ground); sampled every trail_step
+        self.trail = collections.deque(maxlen=max(1, int(self.cfg["terrain"].get("trail_length", 0.0) / 0.25)))
         self.get_logger().info(f"AdaptMap ready: {self.map.stats()['total_cells']} cells, model={self.cfg['model']['backend']}")
 
         # Robot pose from /odom (depth 1, own thread) into a short history; the Python TF listener
@@ -194,6 +196,8 @@ class AdaptMapNode(Node):
         self.pub_cells = {z["name"]: self.create_publisher(PointCloud2, f"/adaptmap/cells/{z['name']}", 1) for z in self.cfg["zones"]}
         self.pub_cloud = self.create_publisher(PointCloud2, "/adaptmap/labeled_cloud", 1)
         self.pub_cost = self.create_publisher(OccupancyGrid, "/adaptmap/costmap", 1)
+        # same costmap for the global planner, with keep-outs around people as high cost, not lethal
+        self.pub_cost_plan = self.create_publisher(OccupancyGrid, "/adaptmap/costmap_plan", 1)
         self.pub_terrain = self.create_publisher(GridMap, "/adaptmap/terrain", 1)
         self.pub_stats = self.create_publisher(String, "/adaptmap/stats", 10)
         self.frames = 0
@@ -285,7 +289,12 @@ class AdaptMapNode(Node):
                 terrain.add_lethal(t_an, self.motion.update(t_an["dynamic"], nv["origin"], nv["resolution"], stamp))
             if hl > 0:
                 terrain.free_footprint(t_an, nv, t[:2], yaw, hl, hw)
-            self.pub_cost.publish(costmap_msg(nv, t_an, header))
+                self.update_trail(float(t[0]), float(t[1]), yaw)
+                terrain.known_ground(t_an, nv, self.trail, hl, hw)
+            self.pub_cost.publish(costmap_msg(nv, t_an["cost"], header))
+            plan = terrain.plan_cost(t_an, tc.get("plan_keepout_cost", 90), nv, (float(t[0]), float(t[1]), yaw), hl, hw,
+                                     tc.get("plan_free_margin", 0.0))
+            self.pub_cost_plan.publish(costmap_msg(nv, plan, header))
             tm["costmap"] = time.perf_counter() - t3
             if viz:
                 self.queue_publish((header, export, nv, t_an, xyz, labels))
@@ -305,6 +314,13 @@ class AdaptMapNode(Node):
             self.log.flush()
         if self.frames % 20 == 0:
             self.get_logger().info(f"frame {self.frames}: {rec['timing_ms']} ms, pts {pstats['out']}")
+
+    def update_trail(self, x, y, yaw):
+        """Add the current footprint to the trail every 0.25 m; a jump (teleport) starts a new trail."""
+        if self.trail and math.hypot(x - self.trail[-1][0], y - self.trail[-1][1]) > 3.0:
+            self.trail.clear()
+        if not self.trail or math.hypot(x - self.trail[-1][0], y - self.trail[-1][1]) >= 0.25:
+            self.trail.append((x, y, yaw))
 
     # ---------------------------------------------------------------- publishing
     def queue_publish(self, snap):

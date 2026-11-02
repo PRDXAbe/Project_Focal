@@ -71,11 +71,15 @@ terrain:
   filled_cost: 10         # interpolated (hole-filled) cells are less certain
   class_cost: {road: 0, sidewalk_curb: 30, terrain: 20, vegetation: 60, unknown: 50}
   dynamic_margin: {pedestrian: 1.0}  # lethal keep-out radius (m) around these classes (they move; map lags)
+  plan_keepout_cost: 90   # people, keep-outs, predicted corridors in /adaptmap/costmap_plan (global planner): costly, not lethal
+  plan_free_margin: 0.2   # m around the footprint (one costmap cell) where the planner's costmap is never lethal (the controller's is)
+  trail_length: 10.0      # m of driven footprints counted as known ground (the blind disc never sees them again)
   dynamic_min_height: 0.5 # only cells standing this tall count (a person), not low misclassified clutter
+  dynamic_fresh_age: 0.3  # s; only person cells seen this recently get the keep-out (not their fading trail)
   motion:                 # predicted keep-out: corridor each tracked moving blob sweeps (adaptmap/motion.py)
     enabled: true
     horizon: 2.5          # s of predicted walking marked lethal (speed is underestimated ~30 %)
-    radius: 0.6           # corridor half-width (m)
+    radius: 1.0           # corridor half-width (m), = the keep-out around a standing person: the rover yields a body-width before the walker's line
     min_speed: 0.3        # m/s; slower blobs count as standing (static keep-out only)
     window: 1.0           # s of centroid history; velocity = net displacement over it
     min_span: 0.6         # s of history before a track can count as moving

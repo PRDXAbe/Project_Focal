@@ -1,7 +1,11 @@
 # Nav2 (Humble) on the AdaptMap traversability costmap.
 # - planning frame is odom (simulation odometry is ground truth -> no AMCL / static map)
-# - both costmaps take /adaptmap/costmap through a StaticLayer, keeping its 0..100 costs
+# - both costmaps take AdaptMap's costmap through a StaticLayer, keeping its 0..100 costs
 #   (trinary_costmap: false), and add inflation for the rover's 0.99 x 0.67 m footprint
+# - local (controller + recoveries): /adaptmap/costmap, people's keep-outs and predicted paths lethal -> it yields
+# - global (planner): /adaptmap/costmap_plan, people and their keep-outs only costly -> no detours around a crossing
+#   group; and a 0.40 m robot radius instead of the footprint, so the point planner (SmacPlanner2D) keeps
+#   the centre 0.40 m from obstacles and never routes through a gap narrower than the rover
 
 bt_navigator:
   ros__parameters:
@@ -65,7 +69,8 @@ controller_server:
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
-    failure_tolerance: 5.0       # s: wait out a crossing pedestrian instead of falling into recoveries
+    failure_tolerance: 20.0      # s: RPP's "collision ahead" while a pedestrian crosses counts as failure; wait it
+                                 # out instead of burning the BT's 6 recovery retries (a group crossing takes 10-20 s)
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["general_goal_checker"]
     controller_plugins: ["FollowPath"]
@@ -141,19 +146,19 @@ global_costmap:
       width: 260                    # unknown, so goals up to 130 m away can still be planned towards. A goal
       height: 260                   # outside this window is NOT refused: Nav2 can report success without reaching it
       resolution: 0.2
-      footprint: "[[0.5, 0.35], [0.5, -0.35], [-0.5, -0.35], [-0.5, 0.35]]"
+      robot_radius: 0.40
       trinary_costmap: false
       track_unknown_space: true
       plugins: ["adaptmap_layer", "inflation_layer"]
       adaptmap_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
-        map_topic: /adaptmap/costmap
+        map_topic: /adaptmap/costmap_plan
         map_subscribe_transient_local: false
         subscribe_to_updates: false
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        inflation_radius: 0.8
-        cost_scaling_factor: 4.0
+        inflation_radius: 1.0         # wider, flatter than local: paths keep to the middle of free space
+        cost_scaling_factor: 3.0
       always_send_full_costmap: true
 
 planner_server:

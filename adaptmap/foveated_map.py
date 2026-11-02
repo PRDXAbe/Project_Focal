@@ -14,7 +14,7 @@ derive a ground surface (interpolated under objects), height above ground and
 clearance (free space under overhangs such as tree crowns).
 
 Weights decay with exp(-dt / tau), where tau is short for dynamic classes
-(vehicles, pedestrians). On top of that, *ray clearing* removes obstacles that the
+(vehicles, pedestrians); the rate is the expectation over the cell's class probabilities. On top of that, *ray clearing* removes obstacles that the
 current scan sees through: a LiDAR ray that passes inside a cell's stored obstacle
 span (above its bottom, below its top) without ending there is evidence the cell is
 now free. Likewise a scan that sees only ground in a cell whose stored top is
@@ -112,7 +112,7 @@ def _box(x, k):
     return _rect_sum(x, -k, k, -k, k)
 
 
-_VIEW_KEYS = ("elevation", "ground", "hag", "clearance", "class", "confidence", "filled")
+_VIEW_KEYS = ("elevation", "ground", "hag", "clearance", "class", "confidence", "filled", "age")
 
 
 def _pool_tallest(v, k):
@@ -136,6 +136,7 @@ class FoveatedMap:
         self.layers = self._build_layers(zones)
         self.center_idx = None  # integer snap-cell coords of the map centre
         self.stamp = None
+        self.t0 = None    # first stamp: last_t is stored relative to it (float32 can't hold ROS epoch stamps)
         self._dyn = classes.DYNAMIC.to(self.device)
         self._ground_cls = classes.GROUND.to(self.device)
         self.cleared = 0  # cells reset by ray clearing in the last scan
@@ -247,9 +248,11 @@ class FoveatedMap:
             return
         f = self.fusion
         for l in self.layers:
-            top = l.probs.argmax(0)
-            tau = torch.where(self._dyn[top], f["tau_dynamic"], f["tau_static"])
-            k = torch.exp(-dt / tau)
+            # expected decay rate under the cell's class distribution, not its argmax: a glimpse of a person
+            # that the network half-calls "pole" (typically right next to the robot, inside the LiDAR's blind
+            # disc, where nothing can correct it) would otherwise linger for tau_static as a lethal ghost
+            p_dyn = l.probs[self._dyn].float().sum(0).clamp_(0.0, 1.0)
+            k = torch.exp(-dt * (p_dyn / f["tau_dynamic"] + (1.0 - p_dyn) / f["tau_static"]))
             for w in (l.weight, l.gw, l.ow):
                 w *= k
                 w[w < f["min_weight"]] = 0.0
@@ -285,6 +288,8 @@ class FoveatedMap:
         xyz = xyz.to(self.device, torch.float32)
         probs = probs.to(self.device, torch.float32)
         self.recenter(robot_xy)
+        if self.t0 is None:
+            self.t0 = stamp
         if self.stamp is not None:
             self._decay(stamp - self.stamp)
         self.stamp = stamp
@@ -361,7 +366,7 @@ class FoveatedMap:
         pv[:, o] = (a * pv[:, o].float() + b * (psum[o] / n_o[:, None]).T).half()
         wmax = self.fusion["max_weight"]
         l.weight.view(-1)[o] = torch.clamp(w_old + 1.0, max=wmax)
-        l.last_t.view(-1)[o] = stamp
+        l.last_t.view(-1)[o] = stamp - self.t0
 
         # ground surface and obstacle bottom, each with its own observation weight
         gcells = (gcnt > 0).nonzero().squeeze(1)
@@ -422,6 +427,7 @@ class FoveatedMap:
         hag        height above ground (elevation - ground)
         clearance  free height under the lowest obstacle point (NaN where nothing hangs/stands)
         filled     cell had no data; ground interpolated between neighbours on opposite sides
+        age        seconds since the cell last got points
         Cells outside the ring or unknown are NaN / class 0.
         """
         f = self.fusion
@@ -467,6 +473,8 @@ class FoveatedMap:
             "ground": torch.where(known, ground, nan),
             "hag": torch.where(known, elevation - ground, nan),
             "clearance": torch.where(has_o, l.omin - ground, nan),
+            "age": torch.where(valid, (self.stamp - self.t0) - l.last_t, nan) if self.stamp is not None
+            else torch.full_like(l.last_t, float("nan")),
             "mean": torch.where(valid, l.zmean, nan),
             "std": torch.where(valid, var.sqrt(), nan),
             "class": out_cls,
@@ -494,7 +502,7 @@ class FoveatedMap:
         rel = torch.stack([gx.reshape(-1), gy.reshape(-1)], 1)
         zone = self.zone_of(rel + self.center_xy)
         out = {k: torch.full((n * n,), float("nan"), device=self.device)
-               for k in ("elevation", "ground", "hag", "clearance", "confidence")}
+               for k in ("elevation", "ground", "hag", "clearance", "confidence", "age")}
         out["class"] = torch.zeros(n * n, dtype=torch.long, device=self.device)
         out["filled"] = torch.zeros(n * n, dtype=torch.bool, device=self.device)
         for i, l in enumerate(self.layers):
