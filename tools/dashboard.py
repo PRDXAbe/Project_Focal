@@ -218,7 +218,7 @@ class Scenarios:
 
     def _run(self, sc):
         import rclpy
-        from nav_scenarios import ROAD_HALF, ROBOT_TOP, Runner, obstacles
+        from nav_scenarios import ROAD_HALF, Runner, obstacles, use_robot
         name, (sx, sy, syaw), (gx, gy), expect, limit, why = sc
         try:
             if self.runner is None:
@@ -230,7 +230,7 @@ class Scenarios:
             if r.pose is None:
                 raise RuntimeError("no odometry / Nav2 not up")
             manifest = json.loads((WORLDS / f"{self.world}_manifest.json").read_text())
-            stat, acts = obstacles(manifest, manifest.get("robot_top", ROBOT_TOP))
+            stat, acts = obstacles(manifest, use_robot())
             r.place(sx, sy, syaw)
             self.state["phase"] = "running"
             res = r.run(name, gx, gy, expect, limit, stat, acts, manifest.get("road_half", ROAD_HALF),

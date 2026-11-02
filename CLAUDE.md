@@ -22,9 +22,14 @@ The method is described in `docs/METHOD.md`; the numbers are in `docs/RESULTS.md
   - `foveated_map.py`: the map (fusion, ray clearing, views, `set_zones`).
   - `preprocess.py`, `segmentation.py`, `terrain.py`, `adaptive.py`, `classes.py`, `config.py`.
   - `motion.py`: pedestrian tracking and the predicted keep-out corridor for Nav2.
-  - `tests/`: 33 pytest tests; CPU-safe, also run by GitHub Actions.
+  - `tests/`: 39 pytest tests; CPU-safe, also run by GitHub Actions.
 - `configs/adaptmap.yaml`: every tunable value (zones, fusion, ray clearing, terrain limits,
   adaptive zones, model).
+- `configs/robots/<name>.yaml`: robot profiles (`rover` default, `ugv`): LiDAR extrinsics, topics,
+  self-filter box, footprint, height, Nav2 footprint. Select with `robot:=<name>` on the launch
+  files, `ROBOT=ugv bash tools/dashboard.sh`, `nav_scenarios.py --robot ugv` (or `$ADAPTMAP_ROBOT`).
+  The UGV model lives in `ros2_ws/src/adaptmap_sim/robots/ugv/rover/` (named `rover` so the worlds'
+  `model://rover` include picks it up when that directory goes first on the model path).
 - `ros2_ws/src/`:
   - `adaptmap_sim`: Gazebo worlds and the rover; `world:=` launch argument.
   - `adaptmap_ros`: the mapping node, launch files, RViz config, `test/` launch_testing smoke test.

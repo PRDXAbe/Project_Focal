@@ -112,11 +112,17 @@ For each scan with timestamp *t*:
    (0.5 m). When it moves by *(dx, dy)* snap steps, each layer is shifted by
    *(dx, dy)·(0.5 / cᵢ)* cells and the newly exposed strips are cleared. Because every cᵢ divides
    0.5 m, all layers stay exactly aligned with each other and with the world.
-2. **Class-aware temporal decay.** Every cell's weight decays as *w ← w · exp(−Δt / τ)*, where
-   τ depends on the cell's current top class: τ_dynamic = 0.5 s for vehicles/pedestrians,
-   τ_static = 20 s otherwise. Cells whose weight drops below *w_min* revert to unknown. Moving
-   objects therefore fade within about a second instead of leaving "ghost trails", while static
-   structure persists when briefly out of view.
+2. **Class-aware temporal decay.** Every cell's weight decays as *w ← w · exp(−Δt · r)*, with
+   the *expected* decay rate under the cell's class probabilities,
+   *r = p_dyn / τ_dynamic + (1 − p_dyn) / τ_static*, where *p_dyn* is the probability mass on the
+   dynamic classes (vehicles, pedestrians), τ_dynamic = 0.5 s and τ_static = 20 s. Cells whose weight
+   drops below *w_min* revert to unknown. Moving objects therefore fade within about a second
+   instead of leaving "ghost trails", while static structure persists when briefly out of view.
+   Using the expectation rather than the top class matters next to the robot: a person
+   half-recognised as "pole" from close range, inside the blind disc where no later scan can
+   correct it, would otherwise stay as a lethal ghost for τ_static. Each cell also records when it
+   last got points (relative to the map's first scan, so float32 keeps millisecond resolution); views
+   expose it as an **age** layer.
 3. **Zone assignment.** Chebyshev distance *d = max(|x − cₓ|, |y − c_y|)* picks the layer.
 4. **Per-cell scan statistics.** These are GPU scatter reductions over the points of the scan
    in each cell: min, max, mean and mean-square height, plus the mean class-probability vector.
@@ -209,15 +215,31 @@ the same map serves a rover (12 cm step, 1.85 m height including its LiDAR mast)
 height must be the robot's *full* height: with the rover's 0.4 m body height the map called a bar
 1.3 m up passable, and the mast would have hit it.
 
-Two rules are specific to navigation:
-- **Pedestrian keep-out.** Cells whose top class is pedestrian and that stand more than 0.5 m above
-  the ground make every cell within 1 m lethal (personal space plus the distance walked while the
-  costmap is in transit). A person is an obstacle whatever its label, since anything taller than
-  the step limit is; the label adds the margin.
+Rules specific to navigation:
+- **Pedestrian keep-out.** Cells whose top class is pedestrian, that stand more than 0.5 m above
+  the ground **and were observed in the last 0.3 s** make every cell within 1 m lethal (personal
+  space plus the distance walked while the costmap is in transit). A person is an obstacle whatever
+  its label, since anything taller than the step limit is; the label adds the margin. Only fresh
+  cells seed the disc (and the motion tracker, §3.9): a walking person leaves cells behind that take
+  ~2 s to fade where the ground behind them is not visible, i.e. right next to the robot, and a disc
+  around that trail blocked a band ~2.5 m long per walker.
 - **The robot's own footprint is never lethal** in the published costmap. Keep-out discs,
   predicted corridors (§3.9) and step checks reach into neighbouring cells; if they cover the
   robot, the controller and every recovery behaviour see a collision at the current pose and the
   robot deadlocks.
+- **Driven ground is known ground.** Cells the robot's footprint has covered over the last 10 m
+  are traversable (cost 0) while they are unknown. Once the robot is there they lie in the blind
+  disc (3.7 m for this sensor) and are never observed again, and Nav2's recovery behaviours treat
+  unknown cells as collisions, so backing up along the way it came failed. Cells observed since
+  (a person walking behind the robot) keep their cost.
+- **Two costmaps: people are a timing constraint, not a wall.** The controller's costmap (the one
+  above) has people, their keep-outs and predicted corridors lethal, so the robot yields. The global
+  planner gets a second costmap in which these cost 90 (high but traversable); obstacles, curbs and
+  steps stay lethal. With one costmap a group crossing the road made the road "blocked", and the
+  planner detoured through a gap in the curb onto the sidewalk; now it keeps the route and the
+  controller waits for the people to pass. In the planner's costmap nothing within one cell (0.2 m)
+  of the footprint is lethal either, so the planner can always start from where the robot stands
+  (the controller still checks the full footprint before it moves).
 
 The costmap is built and published on the mapping thread **after every scan** (about 25–45 ms
 including terrain analysis), ahead of any visualisation, so it reaches the planner 0.2–0.4 s
@@ -254,12 +276,25 @@ it is too late. `adaptmap/motion.py` predicts instead:
    or is seen from a changing angle, has a centroid that jumps back and forth; it is fast but goes
    nowhere, so it gets no prediction.
 4. Each moving track marks a capsule lethal: from the centroid to **the blob's front edge along
-   the velocity** plus *v* · 2.5 s, 0.6 m wide on each side. Moving-class cells fade over
+   the velocity** plus *v* · 2.5 s, 1.0 m wide on each side (the same margin as a standing person's
+   keep-out, so the robot yields a body-width before the walker's line instead of on it). Moving-class cells fade over
    τ_dynamic, so a walking person's blob drags a trail and its centroid lags the person by up to
    ~1 m; the front edge does not.
 
 In the simulated crossing scenario this turned contact at full speed into the robot stopping
 about 3 m from the walker and continuing once they had passed.
+
+### 3.10 Robot profiles
+
+Everything robot-specific is one file, `configs/robots/<name>.yaml`: the LiDAR's position on the
+robot (`lidar_offset`), the topics, the self-filter box (points on the robot's own body), the
+footprint and height used by the terrain analysis, and the Nav2 footprint and planner radius.
+`robot:=<name>` on the launch files (or `$ADAPTMAP_ROBOT`) selects it; the map, costmaps and
+planner rules are unchanged. The segmentation network sees the scene from the height it was trained
+at: the cloud is shifted by *(training height − sensor height)* before segmentation only, and the
+map is built from the true geometry. Two profiles exist: the 0.99 × 0.67 m rover (LiDAR 1.73 m up
+above the centre) and a 1.40 × 0.95 m four-wheel skid-steer UGV (LiDAR 1.30 m up, 0.35 m ahead of
+the centre). Its planner radius (0.55 m) rejects gaps narrower than 1.1 m.
 
 ## 4. Semantic segmentation
 
@@ -306,6 +341,7 @@ about 3 m from the walker and continuing once they had passed.
 | ROS 2 node (costmap, GridMaps, cells, stats) | `ros2_ws/src/adaptmap_ros/adaptmap_ros/adaptmap_node.py` |
 | Nav2 configuration | `ros2_ws/src/adaptmap_nav/` |
 | Gazebo worlds + rover | `tools/make_world.py`, `ros2_ws/src/adaptmap_sim/` |
+| Robot profiles (rover, UGV) | `configs/robots/`, `ros2_ws/src/adaptmap_sim/robots/`, `adaptmap/config.py` |
 | Analytic LiDAR simulator | `tools/synth_scan.py` |
 | Training data and fine-tuning | `tools/record_labeled.py`, `tools/autolabel.py`, `tools/finetune.py` |
 | Evaluations | `tools/benchmark.py`, `tools/eval_sim_test.py`, `tools/eval_bag.py`, `tools/eval_semanticposs.py`, `tools/run_dataset.py`, `tools/nav_scenarios.py` → `tools/make_results.py` → `docs/RESULTS.md` |
@@ -384,7 +420,12 @@ overhang). The failures, by cause:
   established whether the planner cut too close or the crate faded from the map while it sat inside
   the blind disc next to the robot.
 - Low obstacles that a stationary robot can no longer see (inside the blind disc) decay with
-  τ_static = 20 s.
+  τ_static = 20 s. The sensor cannot see the ground within 3.7 m, or the top of a 25 cm object within
+  3.2 m; a robot *placed* closer than that to a low obstacle never sees it (one stress-test scenario
+  did this and was moved; `tools/make_tier_worlds.py` now checks every start pose).
+- The larger UGV (0.95 m wide) does not get through the stress test's 1.4 m opening: at the 0.2 m
+  costmap cell the wall edges can each take one cell, leaving about 1.0 m. It stops without touching
+  the wall. A finer costmap (0.1 m) near the robot would fix it at four times the planner's cells.
 - Not yet run on embedded hardware (Jetson / TensorRT). Live rate (6 scans/s) is below the
   10 Hz sensor rate only when the simulator and visualisation share the laptop GPU.
 
@@ -395,8 +436,8 @@ overhang). The failures, by cause:
 2. Choosing each layer's cell size to match the LiDAR's angular sampling spacing at that
    layer's outer range.
 3. Per-cell fusion of height statistics *and* a class-probability vector as a weight-decayed
-   running average, where the decay time-constant is selected per cell from its current
-   semantic class (fast for dynamic classes, slow for static ones).
+   running average, where the decay rate is set per cell by its semantic class (fast for dynamic
+   classes, slow for static ones; see 19).
 4. A per-cell confidence that combines classifier certainty with observation support.
 5. Rolling all layers in snap steps equal to the coarsest cell, with every finer cell size an
    integer divisor of it, so layers stay mutually aligned without resampling.
@@ -426,3 +467,20 @@ overhang). The failures, by cause:
     exact labels from the world manifest with a ground-contact rule, a reduced-class head
     initialised from the pretrained classifier's rows, and distillation towards the pretrained
     network where it is confident and consistent with the label.
+17. Two costmaps from one map: the people-related keep-outs (the person, the keep-out disc, the
+    predicted corridor) are lethal for the local controller but only costly for the global planner,
+    so a crowd delays the robot instead of rerouting it, and the planner's costmap is never lethal
+    within one cell of the robot's footprint for cells not observed in the last second (stale
+    glimpses of a passer-by; an obstacle still in view stays lethal).
+18. Treating cells the robot's own footprint has covered as known traversable ground while they are
+    otherwise unknown (they lie in the sensor's blind disc), so recovery behaviours can retrace the
+    robot's path.
+19. Decaying each cell at the expected rate under its class-probability vector, so partially
+    recognised dynamic objects fade like dynamic ones.
+20. Seeding keep-out zones and motion tracks only from moving-class cells observed within a short
+    age, using a per-cell last-observation time, so the fading trail behind a walker blocks nothing
+    beyond itself.
+21. Moving the whole method to a different robot through a profile alone (LiDAR extrinsics,
+    self-filter box, footprint, height), reusing a segmentation network trained at one sensor
+    height by shifting the cloud to that height for segmentation only, while the map keeps the true
+    geometry.

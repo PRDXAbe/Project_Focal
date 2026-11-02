@@ -1,0 +1,13 @@
+# Robot profile: a bigger platform for P9. Same LiDAR on a short mast at the front, not above the centre.
+description: 1.40 x 0.95 m four-wheel skid-steer UGV, 64-beam LiDAR 1.30 m up and 0.35 m ahead of the centre
+lidar_offset: [0.35, 0.0, 1.30]
+cloud_topic: /lidar/points
+odom_topic: /odom
+preprocess:
+  self_box: [-1.1, 0.4, -0.55, 0.55, -1.6, 0.1]   # body x -0.70..0.70 m from the centre = -1.05..0.35 m from the sensor
+terrain:
+  robot_height: 1.42
+  robot_half_size: [0.70, 0.475]
+nav2:
+  footprint: "[[0.71, 0.49], [0.71, -0.49], [-0.71, -0.49], [-0.71, 0.49]]"
+  robot_radius: 0.55              # rejects gaps narrower than 1.1 m

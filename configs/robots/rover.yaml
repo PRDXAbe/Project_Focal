@@ -1,0 +1,14 @@
+# Robot profile (adaptmap/config.py): everything specific to the platform. Select with robot:=<name> on the
+# launch files, $ADAPTMAP_ROBOT, or `robot:` in configs/adaptmap.yaml.
+description: 0.99 x 0.67 m differential-drive rover (Husky-sized), 64-beam LiDAR 1.73 m up on a mast (KITTI height)
+lidar_offset: [0.0, 0.0, 1.73]   # sensor position in base_link; base_link = ground under the robot centre (gz odometry)
+cloud_topic: /lidar/points
+odom_topic: /odom
+preprocess:
+  self_box: [-0.6, 0.6, -0.45, 0.45, -2.0, 0.3]   # robot body box in the sensor frame (xmin,xmax,ymin,ymax,zmin,zmax)
+terrain:
+  robot_height: 1.85              # full height incl. the LiDAR mast: drives under clearance above this (m)
+  robot_half_size: [0.495, 0.335] # footprint half length/width (m); map cells under it are cleared each scan
+nav2:                             # written over ros2_ws/src/adaptmap_nav/params/nav2.yaml by nav.launch.py
+  footprint: "[[0.5, 0.35], [0.5, -0.35], [-0.5, -0.35], [-0.5, 0.35]]"   # controller + recoveries
+  robot_radius: 0.40              # global planner (SmacPlanner2D is a point planner): rejects gaps narrower than 0.8 m

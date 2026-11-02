@@ -1,13 +1,14 @@
 # AdaptMap configuration. Distances in metres, times in seconds.
 
 device: cuda
+robot: rover              # platform profile, configs/robots/<name>.yaml (sensor mounting, body, footprint, topics)
 
 preprocess:
   min_range: 0.5          # drop self-hits / near-field noise
   max_range: 100.0        # sensor + map limit
   z_min: -3.0             # ROI height window relative to sensor
   z_max: 5.0
-  self_box: [-0.6, 0.6, -0.45, 0.45, -2.0, 0.3]   # robot body box in sensor frame (xmin,xmax,ymin,ymax,zmin,zmax)
+  # self_box (robot body in the sensor frame): from the robot profile
   outlier_voxel: 0.4      # voxel size for isolation filter
   outlier_min_pts: 2      # voxels with fewer points (and no neighbours) are dropped
   constant_intensity: 0.25  # sim intensity is unrealistic; feed the model a dataset-like mean
@@ -55,8 +56,7 @@ adaptive_zones:
 terrain:
   costmap_cell: 0.2       # navigation grid resolution (m)
   costmap_half: 50.0      # navigation grid half-size (m)
-  robot_height: 1.85      # robot's full height incl. the LiDAR mast (1.73 m sensor): drives under clearance above this (m)
-  robot_half_size: [0.495, 0.335]  # footprint half length/width (m); map cells under it are cleared each scan
+  # robot_height, robot_half_size: from the robot profile
   max_step: 0.12          # highest step the wheels can climb (m); 0.15 m curbs are not climbable
   max_slope_deg: 20.0
   curb_min: 0.05          # a road<->sidewalk height jump in this range is a curb (m)
@@ -96,6 +96,7 @@ model:
   config: checkpoints/minkunet_adapt10.py
   checkpoint: checkpoints/minkunet_adapt10_v3.pth
   half: true               # fp16 inference: ~2.4x faster, 99.95 % identical labels
+  sensor_height: 1.73      # LiDAR height the models were trained at (sim rover, KITTI); others are shifted to it
 
 model_real:
   config: checkpoints/minkunet.py

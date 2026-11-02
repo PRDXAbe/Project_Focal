@@ -39,6 +39,8 @@ After about a minute your browser opens http://localhost:8080 (Gazebo opens too)
    sentence says what it is doing ("Waiting: a pedestrian's predicted path crosses the route").
 4. **Measured results** from the test runs.
 
+To try the bigger robot (a 1.4 m long four-wheel UGV): `ROBOT=ugv bash tools/dashboard.sh`.
+
 Ctrl-C in the terminal stops everything. Without the simulator (`bash tools/dashboard.sh --offline`)
 the page shows the recorded video and results instead of the live map.
 

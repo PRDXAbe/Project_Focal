@@ -4,6 +4,7 @@
 # Usage: bash tools/dashboard.sh                 -> demo world
 #        bash tools/dashboard.sh tier3           -> one of the stress-test worlds (tools/make_tier_worlds.py)
 #        bash tools/dashboard.sh --offline       -> recorded results and video only, no simulation
+#        ROBOT=ugv bash tools/dashboard.sh       -> another robot profile (configs/robots/<name>.yaml)
 # Ctrl-C stops the dashboard and the simulation.
 set -o pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,7 +20,7 @@ fi
 
 source /opt/ros/humble/setup.bash
 source "$ROOT/ros2_ws/install/setup.bash"
-export ADAPTMAP_ROOT="$ROOT" QT_QPA_PLATFORM=xcb
+export ADAPTMAP_ROOT="$ROOT" QT_QPA_PLATFORM=xcb ADAPTMAP_ROBOT="${ROBOT:-rover}"
 # same as tools/manual_test.sh: Gazebo on the NVIDIA GPU, CPU math libraries capped at 2 threads
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-2}"
 export __NV_PRIME_RENDER_OFFLOAD="${__NV_PRIME_RENDER_OFFLOAD:-1}"
@@ -31,7 +32,7 @@ up=0
 for attempt in 1 2 3; do  # Nav2's lifecycle bring-up occasionally stalls (see tools/run_tier_suite.sh)
     bash "$ROOT/tools/stop_demo.sh" > /dev/null 2>&1; sleep 3
     echo "starting Gazebo + AdaptMap + Nav2 ($WORLD, logs: $LOG) ..."
-    ros2 launch adaptmap_nav nav.launch.py world:="$WORLD.sdf" rviz:=false > "$LOG/launch.log" 2>&1 &
+    ros2 launch adaptmap_nav nav.launch.py world:="$WORLD.sdf" robot:="$ADAPTMAP_ROBOT" rviz:=false > "$LOG/launch.log" 2>&1 &
     for i in $(seq 1 120); do grep -q "Managed nodes are active" "$LOG/launch.log" && break; sleep 1; done
     if grep -q "Managed nodes are active" "$LOG/launch.log"; then up=1; break; fi
     echo "Nav2 did not come up (attempt $attempt), relaunching"

@@ -153,15 +153,18 @@ class AdaptMapNode(Node):
         super().__init__("adaptmap")
         self.declare_parameter("config", str(ROOT / "configs" / "adaptmap.yaml"))
         self.declare_parameter("map_frame", "odom")
-        self.declare_parameter("cloud_topic", "/lidar/points")
-        self.declare_parameter("odom_topic", "/odom")
+        self.declare_parameter("robot", "")             # robot profile (configs/robots/<name>.yaml); "" = config default
+        self.declare_parameter("cloud_topic", "")       # "" = from the robot profile
+        self.declare_parameter("odom_topic", "")
         self.declare_parameter("cost_every", 1)         # Nav2 costmap every N scans (on the mapping thread)
         self.declare_parameter("viz_every", 3)          # snapshot (cells, cloud, terrain grid) every N scans
         self.declare_parameter("gridmap_every", 2)      # ...and the heavier per-zone GridMaps every N snapshots
         self.declare_parameter("stats_log", "")
-        # sensor pose in base_link (the rover's fixed mast); avoids a TF listener, see on_odom
-        self.declare_parameter("lidar_offset", [0.0, 0.0, 1.73])
-        self.cfg = load_config(self.get_parameter("config").value)
+        # sensor pose in base_link (the robot's fixed mast; [] = from the robot profile); avoids a TF listener
+        self.declare_parameter("lidar_offset", [0.0])
+        self.cfg = load_config(self.get_parameter("config").value, self.get_parameter("robot").value or None)
+        rob = self.cfg["robot"]
+        param = lambda k: self.get_parameter(k).value or rob[k]  # noqa: E731
         self.frame = self.get_parameter("map_frame").value
         self.cost_every = self.get_parameter("cost_every").value
         self.viz_every = self.get_parameter("viz_every").value
@@ -184,13 +187,19 @@ class AdaptMapNode(Node):
 
         # Robot pose from /odom (depth 1, own thread) into a short history; the Python TF listener
         # cannot keep up with 50 Hz /tf while the GPU thread runs, so its buffer lags ~2 s.
-        self.lidar_offset = np.array(self.get_parameter("lidar_offset").value, np.float32)
+        lo = list(self.get_parameter("lidar_offset").value)
+        self.lidar_offset = np.array(lo if len(lo) == 3 else rob["lidar_offset"], np.float32)
+        # the models were trained with the sensor at model.sensor_height; another mounting height is shifted
+        # to it for segmentation only, so the ground sits where the network expects it
+        self.seg_dz = float(self.lidar_offset[2]) - self.cfg["model"].get("sensor_height", float(self.lidar_offset[2]))
+        self.get_logger().info(f"robot '{rob['name']}': lidar at {self.lidar_offset.tolist()} in base_link, "
+                               f"footprint {self.cfg['terrain'].get('robot_half_size')}, segmentation z shift {self.seg_dz:+.2f} m")
         self.poses = collections.deque(maxlen=200)
         self.pose_lock = threading.Lock()
         latest = QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)
-        self.create_subscription(Odometry, self.get_parameter("odom_topic").value, self.on_odom, QoSProfile(depth=1),
+        self.create_subscription(Odometry, param("odom_topic"), self.on_odom, QoSProfile(depth=1),
                                  callback_group=MutuallyExclusiveCallbackGroup())
-        self.sub = self.create_subscription(PointCloud2, self.get_parameter("cloud_topic").value, self.on_cloud, latest,
+        self.sub = self.create_subscription(PointCloud2, param("cloud_topic"), self.on_cloud, latest,
                                             callback_group=MutuallyExclusiveCallbackGroup())
         self.pub_grid = {z["name"]: self.create_publisher(GridMap, f"/adaptmap/grid/{z['name']}", 1) for z in self.cfg["zones"]}
         self.pub_cells = {z["name"]: self.create_publisher(PointCloud2, f"/adaptmap/cells/{z['name']}", 1) for z in self.cfg["zones"]}
@@ -254,7 +263,12 @@ class AdaptMapNode(Node):
         sync(); tm["preprocess"] = time.perf_counter() - t0
 
         t1 = time.perf_counter()
-        labels, probs = self.seg.segment(clean)
+        if self.seg_dz:
+            seg_in = clean.clone()
+            seg_in[:, 2] += self.seg_dz
+            labels, probs = self.seg.segment(seg_in)
+        else:
+            labels, probs = self.seg.segment(clean)
         sync(); tm["segment"] = time.perf_counter() - t1
 
         t2 = time.perf_counter()

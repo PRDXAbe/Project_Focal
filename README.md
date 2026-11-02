@@ -34,6 +34,7 @@ The method is described in [docs/METHOD.md](docs/METHOD.md) and the measurements
 | What | Command |
 |---|---|
 | **Judge dashboard (one page: why, live map, scenario buttons, results)** | `bash tools/dashboard.sh [tierN]`, opens http://localhost:8080; `bash tools/dashboard.sh --offline` for recorded results only |
+| Bigger robot (1.4 × 0.95 m UGV, LiDAR 1.3 m up; same model and map) | `ROBOT=ugv bash tools/dashboard.sh`, or `robot:=ugv` on any launch file |
 | Unit tests | `.venv/bin/python -m pytest adaptmap/tests` (also run by GitHub Actions on every push) |
 | Offline benchmark (no ROS) | `.venv/bin/python tools/benchmark.py --frames 300` (`--speed 8` exercises adaptive zones) |
 | **Manual test (you drive, 3D view)** | `bash tools/manual_test.sh` (+ `--video data/my_drive.mp4 [--color class\|zone\|cost] [--top]`); guide: [docs/TESTING.md](docs/TESTING.md) |
@@ -64,7 +65,7 @@ Wayland, screen grabs come out black. To record the RViz window itself, use GNOM
 ## Layout
 ```
 adaptmap/        core library (no ROS dependency) + tests
-configs/         zones, cell sizes, fusion, model
+configs/         zones, cell sizes, fusion, model; robots/ = robot profiles (rover, ugv)
 ros2_ws/src/     adaptmap_sim (Gazebo world, rover), adaptmap_ros (node, launch, rviz)
 tools/           world generator, LiDAR ray-caster, benchmark, autolabel, finetune, demo recorder
 docs/            METHOD.md, RESULTS.md, figures/

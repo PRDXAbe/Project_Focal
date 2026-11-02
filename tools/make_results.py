@@ -10,12 +10,15 @@ Inputs (each optional; missing sections are skipped):
   docs/kitti_*_summary.json       tools/run_dataset.py          real KITTI drive
   docs/nav_results.json           tools/nav_scenarios.py        Nav2 scenarios (demo world)
   docs/nav_tier{1..5}.json        tools/run_tier_suite.sh       Nav2 stress test, five worlds
+  docs/nav_*_ugv.json             tools/nav_scenarios.py --robot ugv   second robot (P9)
   docs/soak_summary.json          (recorded /adaptmap/stats)    long-run stability
 Usage: python3 tools/make_results.py
 """
 import glob
 import json
 from pathlib import Path
+
+import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 D = ROOT / "docs"
@@ -204,6 +207,27 @@ def main():
                          f"{ok}/{len(rr)} {'✅' if ok == len(rr) else '❌'} | {med([r['time_s'] for r in rr])} s | "
                          f"{stat} | {ped} |")
             L.append("")
+
+    ugv = [(w, load(f"nav_{w}_ugv.json")) for w in ("results", "tier1", "tier2", "tier3", "tier4", "tier5")]
+    ugv = [(w, r) for w, r in ugv if r]
+    if ugv:
+        prof = yaml.safe_load((ROOT / "configs" / "robots" / "ugv.yaml").read_text())
+        hl, hw = prof["terrain"]["robot_half_size"]
+        L += ["## Second robot: a larger UGV (no retraining)", "",
+              f"The same model, map and costmaps on a 4-wheel skid-steer UGV, {2 * hl:.2f} × {2 * hw:.2f} m, LiDAR "
+              f"{prof['lidar_offset'][2]:.2f} m up and {prof['lidar_offset'][0]:.2f} m forward (`robot:=ugv`, profile "
+              "`configs/robots/ugv.yaml`: extrinsics, self-filter box, footprint, height). The segmentation model was "
+              "trained at the rover's 1.73 m sensor height; scans are shifted to that height before segmentation only.", "",
+              "| World | Scenario | Expected | Passed | Min clearance (static) |", "|---|---|---|---|---|"]
+        for w, rs in ugv:
+            title = "Demo world" if w == "results" else f"Tier {w[-1]}"
+            for n in dict.fromkeys(r["scenario"] for r in rs):
+                rr = [r for r in rs if r["scenario"] == n]
+                ok = sum(r["passed"] for r in rr)
+                L.append(f"| {title} | {n.replace('_', ' ')} | {'reach' if rr[0]['expected_success'] else 'refuse'} | "
+                         f"{ok}/{len(rr)} {'✅' if ok == len(rr) else '❌'} | "
+                         f"{min(r['min_clearance_static_m'] for r in rr):.2f} m |")
+        L.append("")
 
     (D / "RESULTS.md").write_text("\n".join(L))
     print(f"wrote {D / 'RESULTS.md'} ({len(L)} lines)")

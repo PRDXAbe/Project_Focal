@@ -1,4 +1,4 @@
-"""Full demo: sim + AdaptMap node + RViz (+ optional scripted drive)."""
+"""Full demo: sim + AdaptMap node + RViz (+ optional scripted drive). robot:=rover|ugv picks the platform."""
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -23,12 +23,14 @@ def generate_launch_description():
         DeclareLaunchArgument("viz_every", default_value="3"),
         DeclareLaunchArgument("world", default_value="urban.sdf"),
         DeclareLaunchArgument("rviz", default_value="true"),
+        DeclareLaunchArgument("robot", default_value="rover"),   # configs/robots/<name>.yaml
         SetEnvironmentVariable("ADAPTMAP_ROOT", ROOT),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(sim),
-                                 launch_arguments={"world": LaunchConfiguration("world")}.items()),
+                                 launch_arguments={"world": LaunchConfiguration("world"),
+                                                   "robot": LaunchConfiguration("robot")}.items()),
         Node(package="adaptmap_ros", executable="adaptmap_node", output="screen",
              prefix=f"{ROOT}/.venv/bin/python",
-             parameters=[st, {"stats_log": LaunchConfiguration("stats_log"),
+             parameters=[st, {"stats_log": LaunchConfiguration("stats_log"), "robot": LaunchConfiguration("robot"),
                               "viz_every": ParameterValue(LaunchConfiguration("viz_every"), value_type=int)}]),
         Node(package="adaptmap_ros", executable="waypoint_driver", output="screen", parameters=[st],
              condition=IfCondition(LaunchConfiguration("drive"))),

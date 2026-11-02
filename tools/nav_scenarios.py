@@ -34,8 +34,8 @@ from synth_scan import actor_pose  # noqa: E402
 
 WORLDS = ROOT / "ros2_ws" / "src" / "adaptmap_sim" / "worlds"
 ROAD_HALF = 4.0          # road is |y| < 4 m; beyond is the 15 cm curb + sidewalk (tier manifests set their own)
-ROBOT_TOP = 1.8          # LiDAR on its mast: overhangs below this would hit the real robot
-HALF_L, HALF_W = 0.495, 0.335   # rover footprint 0.99 x 0.67 m
+ROBOT_TOP = 1.8          # LiDAR on its mast: overhangs below this would hit the real robot (use_robot() sets it)
+HALF_L, HALF_W = 0.495, 0.335   # footprint half length / width (use_robot() sets them from the robot profile)
 PED_RADIUS = 0.35
 
 # (name, start x, y, yaw, goal x, goal y, expect success, time limit s, what it tests)
@@ -48,6 +48,16 @@ SCENARIOS = [
     ("u_turn", 110.0, -2.0, 0.0, 90.0, 2.0, True, 90, "turn around inside the 8 m road"),
 ]
 MOVING = 0.05  # m/s: a pedestrian touching a rover slower than this walked into it (sim actors don't avoid)
+
+
+def use_robot(name=None):
+    """Footprint and height from the robot profile (configs/robots/<name>.yaml); returns the robot's top."""
+    global HALF_L, HALF_W, ROBOT_TOP
+    from adaptmap.config import load_config
+    tc = load_config(robot=name)["terrain"]
+    HALF_L, HALF_W = tc["robot_half_size"]
+    ROBOT_TOP = tc["robot_height"]
+    return ROBOT_TOP
 
 
 def footprint(x, y, yaw, step=0.05):
@@ -178,10 +188,12 @@ class Runner(Node):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--world", default="urban", help="urban (demo world, built-in scenarios) or tier1 ... tier5")
-    ap.add_argument("--out", help="default docs/nav_results.json (urban) or docs/nav_<world>.json")
+    ap.add_argument("--out", help="default docs/nav_results.json (urban) or docs/nav_<world>.json (+ _<robot> if not the rover)")
     ap.add_argument("--only", help="run only this scenario")
     ap.add_argument("--repeat", type=int, default=1, help="run the suite this many times (pedestrian timing varies)")
+    ap.add_argument("--robot", help="robot profile the sim runs (default: $ADAPTMAP_ROBOT or the config's)")
     a = ap.parse_args()
+    robot_top = use_robot(a.robot)
     rclpy.init()
     r = Runner()
     print("waiting for Nav2 (navigate_to_pose) and odometry ...", flush=True)
@@ -189,11 +201,14 @@ def main():
         rclpy.spin_once(r, timeout_sec=0.1)
     r.spin_for(5.0)  # let AdaptMap fill the costmap
     manifest = json.loads((WORLDS / f"{a.world}_manifest.json").read_text())
-    stat, acts = obstacles(manifest, manifest.get("robot_top", ROBOT_TOP))
+    stat, acts = obstacles(manifest, robot_top)
     road_half = manifest.get("road_half", ROAD_HALF)
     scenarios = [(c["name"], *map(float, c["start"]), *map(float, c["goal"]), c["expect"] == "reach", c["limit"],
                   c["what"]) for c in manifest["scenarios"]] if "scenarios" in manifest else SCENARIOS
-    out = a.out or str(ROOT / "docs" / ("nav_results.json" if a.world == "urban" else f"nav_{a.world}.json"))
+    import os
+    robot = a.robot or os.environ.get("ADAPTMAP_ROBOT") or "rover"
+    tag = "" if robot == "rover" else f"_{robot}"   # other robots never overwrite the rover's results
+    out = a.out or str(ROOT / "docs" / (("nav_results" if a.world == "urban" else f"nav_{a.world}") + tag + ".json"))
     results = []
     for run in range(a.repeat):
         for name, sx, sy, syaw, gx, gy, expect, limit, why in scenarios:
