@@ -138,6 +138,8 @@ class FoveatedMap:
         self.stamp = None
         self.t0 = None    # first stamp: last_t is stored relative to it (float32 can't hold ROS epoch stamps)
         self._dyn = classes.DYNAMIC.to(self.device)
+        hold = fusion.get("hold_classes", [])
+        self._hold = torch.tensor([n in hold for n in classes.NAMES], device=self.device)
         self._ground_cls = classes.GROUND.to(self.device)
         self.cleared = 0  # cells reset by ray clearing in the last scan
 
@@ -243,15 +245,25 @@ class FoveatedMap:
         return ij[:, 0] * l.n + ij[:, 1]
 
     # ------------------------------------------------------------------ update
-    def _decay(self, dt):
+    def _decay(self, dt, sensor_xy=None):
         if dt <= 0:
             return
         f = self.fusion
-        for l in self.layers:
+        hold_r = f.get("hold_radius", 0.0)
+        for i, l in enumerate(self.layers):
             # expected decay rate under the cell's class distribution, not its argmax: a glimpse of a person
             # that the network half-calls "pole" (typically right next to the robot, inside the LiDAR's blind
             # disc, where nothing can correct it) would otherwise linger for tau_static as a lethal ghost
             p_dyn = l.probs[self._dyn].float().sum(0).clamp_(0.0, 1.0)
+            if i == 0 and hold_r > 0 and sensor_xy is not None and self._hold.any():
+                # Right beside the sensor a car's side is below the lowest beam (a 1.5 m car within ~0.5 m of
+                # a 1.73 m LiDAR): not seeing it is no evidence it left. There, held classes (vehicles) decay
+                # like static ones; elsewhere a car that drives off is still cleared by rays and ground.
+                c = (torch.arange(l.n, device=self.device, dtype=torch.float32) + 0.5) * l.cell - l.half
+                cx, cy = self.center_xy[0] + c, self.center_xy[1] + c
+                near = ((cx[:, None] - sensor_xy[0]) ** 2 + (cy[None, :] - sensor_xy[1]) ** 2) < hold_r ** 2
+                p_dyn = p_dyn - near * l.probs[self._hold].float().sum(0)
+                p_dyn.clamp_(0.0, 1.0)
             k = torch.exp(-dt * (p_dyn / f["tau_dynamic"] + (1.0 - p_dyn) / f["tau_static"]))
             for w in (l.weight, l.gw, l.ow):
                 w *= k
@@ -291,7 +303,8 @@ class FoveatedMap:
         if self.t0 is None:
             self.t0 = stamp
         if self.stamp is not None:
-            self._decay(stamp - self.stamp)
+            sensor = torch.as_tensor(origin if origin is not None else robot_xy, dtype=torch.float32)[:2]
+            self._decay(stamp - self.stamp, sensor.to(self.device))
         self.stamp = stamp
 
         is_ground = probs[:, self._ground_cls].sum(1) > 0.5
@@ -406,7 +419,14 @@ class FoveatedMap:
             idx = self._cell_index(l, q[m, :2])
             z = q[m, 2]
             ow, omin, zmax, seen = l.ow.view(-1)[idx], l.omin.view(-1)[idx], l.zmax.view(-1)[idx], l.seen.view(-1)[idx]
-            inside = (ow > 0) & ~seen & (z > omin + margin) & (z < zmax - margin)
+            mg = margin
+            if l.cell <= f.get("thin_clear_max_cell", 0.0):
+                # thin spans: a fragment under 2 * margin tall (the head and shoulders of a person who
+                # walked up to the robot, seen only by the lowest beams) could never be cleared and faded at
+                # tau_static as a lethal ghost in front of the robot. In the finest zone, a ray through its
+                # middle part contradicts it; a real thin object there is hit again every scan.
+                mg = torch.minimum(torch.full_like(z, margin), f.get("thin_clear_frac", 0.25) * (zmax - omin))
+            inside = (ow > 0) & ~seen & (z > omin + mg) & (z < zmax - mg)
             if not inside.any():
                 continue
             hits = torch.zeros(l.n * l.n, device=self.device).index_add_(0, idx[inside], torch.ones_like(z[inside]))

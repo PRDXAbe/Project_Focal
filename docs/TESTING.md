@@ -234,8 +234,8 @@ python3 tools/make_results.py             # tables into docs/RESULTS.md
 | 5 Chaos | narrow street, a person stepping out from behind a parked car, chicane, a group, all at once |
 
 To watch one world yourself: `ros2 launch adaptmap_nav nav.launch.py world:=tier5.sdf` and give goals
-in RViz. Where it struggles (see `docs/RESULTS.md`): when a group of people crosses together it stops
-*on* the crossing line instead of before it, and then does not move off again.
+in RViz. Where it struggles (see `docs/RESULTS.md`): after yielding to a person it sometimes waits too
+long to move off again, and a 6 cm speed bump occasionally stops it.
 
 ## Known mistakes you will see
 

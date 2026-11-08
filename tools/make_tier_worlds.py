@@ -71,8 +71,10 @@ def wall_across(name, x, road_w, gap_lo, gap_hi, h=1.0):
         mw.box(f"{name}_l", "building_wall", x, (gap_hi + hi) / 2, 0.0, 0.3, hi - gap_hi, h, color=(0.55, 0.5, 0.5))
 
 
-def sc(name, start, goal, expect, limit, what):
-    return {"name": name, "start": list(start), "goal": list(goal), "expect": expect, "limit": limit, "what": what}
+def sc(name, start, goal, expect, limit, what, sync=None):
+    """sync: [actor, phase s]: tools/nav_scenarios.py starts the run at that point of the actor's looped walk."""
+    d = {"name": name, "start": list(start), "goal": list(goal), "expect": expect, "limit": limit, "what": what}
+    return d | ({"sync": list(sync)} if sync else {})
 
 
 def tier1():
@@ -165,14 +167,19 @@ def tier5():
     crate("chicane_b", 47, 0.8, 1.0, 1.0, 1.0)
     crate("low_crate", 75, 0.3, 0.6, 0.6, 0.25)
     mw.actor("occluded", [(26.5, -5.0), (26.5, 5.0)], speed=1.3)         # steps out right behind car pr_3 (x 20-24)
-    for k, (x, sp) in enumerate([(59, 1.0), (60.5, 1.05), (62, 0.95)]):
-        mw.actor(f"group_{k}", [(x, 5.0), (x, -5.0)], speed=sp)
+    # a group: same pace and period (32 s), cross together, staggered by +-0.6 s, wait 6 s on the far sidewalk,
+    # cross back; the road is free ~9 s between crossings. (Until 2026-11-08 they walked at 0.95 / 1.0 /
+    # 1.05 m/s without waiting: within a few cycles they had drifted into a continuous three-lane stream that
+    # left the road free for only ~2 s at a time, and the scenario failed 3/3.)
+    for k, (x, d) in enumerate([(59, 0.0), (60.5, 0.6), (62, -0.4)]):
+        mw.actor(f"group_{k}", [(x, 5.0), (x, -5.0)], speed=1.0, waits={0: 6.0 + d, 1: 6.0 - d})
     mw.actor("head_on", [(96, 0.0), (80, 0.0)], speed=1.0)
     mw.actor("stopper", [(108, -5.0), (108, 0.0), (108, 5.0)], speed=1.0, waits={1: 5.0})
     return "Chaos", road_w, [
         sc("occluded_walker", (5, 0.0, 0), (35, 0.0), "reach", 90, "a person steps out from behind a parked car at x = 26.5"),
         sc("chicane", (32, 0.0, 0), (55, 0.0), "reach", 80, "crates force an S-bend at x = 40 and 47"),
-        sc("group_crossing", (50, 0.0, 0), (72, 0.0), "reach", 90, "three people cross together at x = 59-62"),
+        sc("group_crossing", (50, 0.0, 0), (72, 0.0), "reach", 90, "three people cross together at x = 59-62",
+           sync=("group_0", 3.0)),   # they set off 3 s after the robot: in the lane as it arrives
         sc("head_on_narrow", (66, 0.0, 0), (99, 0.0), "reach", 100, "a person walks down the single lane; a 25 cm crate at x = 75"),
         sc("stopper", (98, 0.0, 0), (116, 0.0), "reach", 90, "a person stops 5 s in the lane at x = 108"),
         sc("full_run", (0, 0.0, 0), (125, 0.0), "reach", 300, "125 m through all of the above"),

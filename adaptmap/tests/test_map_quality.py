@@ -71,6 +71,29 @@ def test_rays_above_object_do_not_clear_it():
     assert still_there
 
 
+def _thin(z0, z1, rays_at, still_hit):
+    """A 0.2 m thin fragment 1 m ahead (z0..z1), then scans whose rays pass through it at rays_at; with
+    still_hit the fragment is also seen again in every scan (a real thin object)."""
+    m = make_map()
+    frag = box(1.0, 1.2, -0.1, 0.1, z0, z1)
+    m.integrate(frag, onehot(len(frag), "building_wall"), [0, 0], 0.0, origin=[0, 0, 1.73])
+    ground = grid(3.0, 3.4, -0.3, 0.3, 0.02, 0.0)
+    # rays from the sensor to the ground ~3.2 m away pass x = 1.1 at z ~ 1.73 * (1 - 1.1 / 3.2) ~ 1.14
+    for k in range(1, 9):
+        hit = torch.cat([ground, frag]) if still_hit else ground
+        m.integrate(hit, onehot(len(hit), "road"), [0, 0], 0.1 * k, origin=[0, 0, 1.73])
+    i, j = cell(m, 0, 1.1, 0.0)
+    return m.layer_view(m.layers[0])["valid"][i, j].item()
+
+
+def test_thin_fragment_cleared_near_robot():
+    assert not _thin(1.05, 1.25, 1.14, still_hit=False)
+
+
+def test_thin_object_still_hit_survives():
+    assert _thin(1.05, 1.25, 1.14, still_hit=True)
+
+
 def test_clearance_under_overhang_and_height_above_ground():
     m = make_map()
     road = grid(2.0, 3.0, 2.0, 3.0, 0.025, 0.0)

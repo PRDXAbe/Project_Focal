@@ -120,7 +120,14 @@ For each scan with timestamp *t*:
    instead of leaving "ghost trails", while static structure persists when briefly out of view.
    Using the expectation rather than the top class matters next to the robot: a person
    half-recognised as "pole" from close range, inside the blind disc where no later scan can
-   correct it, would otherwise stay as a lethal ghost for τ_static. Each cell also records when it
+   correct it, would otherwise stay as a lethal ghost for τ_static. The opposite case is a parked
+   car right beside the robot: within ~0.5 m of a 1.73 m LiDAR the side of a 1.5 m car is below the
+   lowest beam, so it is not seen although it is still there. Within a **hold radius** (1 m) of the
+   sensor, vehicle probability therefore decays at the static rate; elsewhere a car that drives off
+   is still removed by ray and ground clearing. Without the hold, the car's near side faded in ~2 s
+   and the controller saw free space up to contact (the robot touched a parked car in 1 of 3
+   curb-refusal runs). People are not held: they do move, and the keep-out below covers them.
+   Each cell also records when it
    last got points (relative to the map's first scan, so float32 keeps millisecond resolution); views
    expose it as an **age** layer.
 3. **Zone assignment.** Chebyshev distance *d = max(|x − cₓ|, |y − c_y|)* picks the layer.
@@ -138,7 +145,11 @@ For each scan with timestamp *t*:
    points this scan, and never in the last 0.3 m before the ray's own end point. Each such cell's
    weight and obstacle weight are halved per scan; when the obstacle weight falls below *w_min*
    the cell is reset. Rays passing *over* an object or *under* an overhang (a tree crown) clear
-   nothing.
+   nothing. **Thin spans:** in the finest zone the 0.2 m margin shrinks to a quarter of the span.
+   A fragment less than 0.4 m tall, typically the head and shoulders of a person who walked up to
+   the robot, seen only by the lowest beams and labelled "building" or "pole", could otherwise
+   never be cleared and stayed as a lethal ghost in front of the robot for up to ~100 s
+   (τ_static from w_max). A real thin object there is hit again every scan and stays.
 7. **Ground clearing.** A scan that sees *only ground points* in a cell whose stored top is more
    than 0.1 m above the scan's top contradicts the stored obstacle (the spot a pedestrian just
    left). Its obstacle weight is halved per such scan; once it falls below *w_min* the scan
@@ -380,26 +391,27 @@ from 7.1 to 9.6 ms.
 runs at 52 ms per scan (19 Hz) with the pretrained model.
 
 **Autonomous navigation.** Nav2 (SmacPlanner2D + Regulated Pure Pursuit) driving on the AdaptMap
-costmap in the demo world, 5 scripted scenarios × 3 runs: **14/15 passed** (rerun 2026-11-08 on the
-final code; the miss is one curb-refusal run in which the robot, manoeuvring near the curb, touched a
-parked car). The scenarios are:
+costmap in the demo world, 5 scripted scenarios × 3 runs: **15/15 passed** (rerun 2026-11-08 on the
+final code). The scenarios are:
 a pedestrian crossing the road, a parked car blocking the lane, a goal behind a 15 cm curb (must be
 refused), a 55 m route past crates and cars, and a U-turn inside the road. Pass means the expected
 outcome, never leaving the road, no contact with static obstacles and no contact with a pedestrian
 while moving.
 
 **Stress test: five worlds of rising difficulty** (`tools/make_tier_worlds.py`, 30 scenarios × 3
-runs, rerun 2026-11-08 on the final code): **86/90 runs passed** (78/90 before the navigation
+runs, rerun 2026-11-08 on the final code): **84/90 runs passed** (78/90 before the navigation
 improvements of §5). By world: open road 15/15, parked street 15/15, pedestrian zone 18/18, obstacle
-course 24/24, chaos 14/18. **In none of the 90 runs did the robot drive into a pedestrian.** It
-handles a 1.4 m opening, a 4 cm pole, a 20 cm box, a 6 cm bump (driven over), a pedestrian stepping
-out from behind a parked car, two people crossing, a runner, a person walking head-on down a single
-lane, a person stopping in the lane, and refuses every goal that has no safe way (curb, 0.55 m gap,
-15 cm wall across the road, 1.3 m overhang). The failures, all in the chaos world:
-- *group crossing* (3 of 3 runs, plus 1 of the 3 125 m full runs that include it): three people
-  crossing together. The robot yields but stops with its front on the crossing band; the group then
-  walks into the stopped robot (the simulated pedestrians do not avoid anything), and the robot does
+course 22/24, chaos 14/18. **In none of the 90 runs did the robot drive into a pedestrian.** It
+handles a 1.4 m opening, a 4 cm pole, a 20 cm box, a group of three people crossing together, two
+people crossing, a runner, a person stopping in the lane, the 125 m chaos run, and refuses every
+goal that has no safe way (curb, 0.55 m gap, 15 cm wall across the road, 1.3 m overhang). The
+failures, each in 2 of 3 runs of a scenario that passed 3/3 in the previous run:
+- *speed bump* (6 cm, to be driven over): the robot stopped in front of the bump and did not reach
+  the goal within the time limit.
+- *occluded walker* (a person stepping out from behind a parked car): the robot yielded, then did
   not move off again before the time limit.
+- *head-on narrow* (a person walking down a single lane): one run timed out; in the other the robot
+  reached the goal but touched a lamp post while making room.
 
 ## 7. Limitations of this prototype
 
@@ -414,19 +426,20 @@ lane, a person stopping in the lane, and refuses every goal that has no safe way
 - Weakest classes: vegetation (61–72 % IoU in simulation) and pedestrians in an unfamiliar world
   (65 %).
 - The pedestrian prediction is a constant-velocity extrapolation of the map's own blobs, with no
-  intent model. Facing a group crossing together, the robot yields too late: it stops on the
-  crossing band and then does not move off again (0/3 in the stress test). Stopping earlier needs
-  the keep-out corridor to cover the group's whole crossing, not just the next 2.5 s.
-- Close to static obstacles the margin is not yet watertight: in 1 of 3 demo-world curb-refusal runs
-  the robot touched a parked car while manoeuvring near the curb (the 1 s planner-margin gate of §5
-  made this rarer but did not remove it).
+  intent model. After yielding, the robot sometimes waits too long to move off again (occluded
+  walker, head-on in a single lane: 2 of 3 runs each time out in the stress test).
+- Close to static obstacles the margin is not yet watertight: in 1 of 3 head-on-narrow runs the
+  robot touched a lamp post while making room for the pedestrian.
+- A 6 cm speed bump stopped the robot in 2 of 3 stress-test runs (3/3 in the previous run); the cause
+  has not been investigated.
 - Low obstacles that a stationary robot can no longer see (inside the blind disc) decay with
   τ_static = 20 s. The sensor cannot see the ground within 3.7 m, or the top of a 25 cm object within
   3.2 m; a robot *placed* closer than that to a low obstacle never sees it (one stress-test scenario
   did this and was moved; `tools/make_tier_worlds.py` now checks every start pose).
 - The larger UGV (0.95 m wide) does not get through the stress test's 1.4 m opening: at the 0.2 m
   costmap cell the wall edges can each take one cell, leaving about 1.0 m. It stops without touching
-  the wall. A finer costmap (0.1 m) near the robot would fix it at four times the planner's cells.
+  the wall. A 0.1 m grid lets it through, but in a trial it also made the UGV stop on open road far
+  more often (57/90 on the stress test), so the profiles keep 0.2 m.
 - Not yet run on embedded hardware (Jetson / TensorRT). Live rate (6 scans/s) is below the
   10 Hz sensor rate only when the simulator and visualisation share the laptop GPU.
 
@@ -448,13 +461,15 @@ lane, a person stopping in the lane, and refuses every goal that has no safe way
 8. An end-to-end GPU pipeline (filter → sparse-CNN segmentation → foveated fusion) at sensor
    rate on laptop-class hardware.
 9. Free-space evidence from the scan's own rays (ray clearing), restricted to the inside of a
-   cell's stored obstacle span, so rays passing over objects or under overhangs clear nothing.
+   cell's stored obstacle span, so rays passing over objects or under overhangs clear nothing; in
+   the finest zone the margin scales with the span, so thin fragments can be cleared too.
 10. Asymmetric fusion for safety: a scan that contradicts a stored obstacle with ground-only
     returns discounts it (ground clearing), and a scan whose top rises above the stored top
     replaces the cell (appearance), so obstacles appear in one scan and vanish on evidence.
 11. Forgetting the cells under the robot's footprint each scan, because they lie in the sensor's
     blind disc where no clearing evidence can arrive, and never marking the robot's own footprint
-    lethal in the published costmap.
+    lethal in the published costmap; conversely, holding vehicle cells right beside the sensor
+    (decaying them at the static rate), where not seeing a parked car's side is no evidence it left.
 12. A clearance layer (free height under the lowest obstacle point above the ground), letting a
     2.5D map mark space under overhangs as drivable for a given robot height.
 13. Ring-gap filling that interpolates ground only between observed cells on opposite sides,

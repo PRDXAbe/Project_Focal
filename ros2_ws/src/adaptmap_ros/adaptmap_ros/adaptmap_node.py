@@ -183,6 +183,9 @@ class AdaptMapNode(Node):
         self.motion = MotionPredictor(mc) if mc.get("enabled") else None
         # footprints along the last few metres driven (terrain.known_ground); sampled every trail_step
         self.trail = collections.deque(maxlen=max(1, int(self.cfg["terrain"].get("trail_length", 0.0) / 0.25)))
+        self.debug_dir, self.debug_last = os.environ.get("ADAPTMAP_DEBUG_DIR"), -1e9
+        if self.debug_dir:
+            os.makedirs(self.debug_dir, exist_ok=True)
         self.get_logger().info(f"AdaptMap ready: {self.map.stats()['total_cells']} cells, model={self.cfg['model']['backend']}")
 
         # Robot pose from /odom (depth 1, own thread) into a short history; the Python TF listener
@@ -310,6 +313,18 @@ class AdaptMapNode(Node):
                                      tc.get("plan_free_margin", 0.0), tc.get("plan_free_min_age", 0.0))
             self.pub_cost_plan.publish(costmap_msg(nv, plan, header))
             tm["costmap"] = time.perf_counter() - t3
+            if self.debug_dir and stamp - self.debug_last >= 0.5:   # ADAPTMAP_DEBUG_DIR: costmap near the robot
+                self.debug_last = stamp
+                r = int(4.0 / nv["resolution"])
+                i0 = int((t[0] - nv["origin"][0]) / nv["resolution"])
+                j0 = int((t[1] - nv["origin"][1]) / nv["resolution"])
+                crop = lambda a: a[i0 - r:i0 + r, j0 - r:j0 + r].cpu().numpy()  # noqa: E731
+                np.savez_compressed(os.path.join(self.debug_dir, f"{stamp:.2f}.npz"), pose=np.array([t[0], t[1], yaw]),
+                                    origin=np.array([nv["origin"][0] + (i0 - r) * nv["resolution"],
+                                                     nv["origin"][1] + (j0 - r) * nv["resolution"]]),
+                                    cost=crop(t_an["cost"]), plan=crop(plan), cls=crop(nv["class"]), hag=crop(nv["hag"]),
+                                    age=crop(nv["age"]), conf=crop(nv["confidence"]), keepout=crop(t_an["keepout"]),
+                                    dynamic=crop(t_an["dynamic"]), obstacle=crop(t_an["obstacle"]))
             if viz:
                 self.queue_publish((header, export, nv, t_an, xyz, labels))
 

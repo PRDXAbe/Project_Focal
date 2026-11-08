@@ -229,8 +229,17 @@ def main():
               f"The same model, map and costmaps on a 4-wheel skid-steer UGV, {2 * hl:.2f} × {2 * hw:.2f} m, LiDAR "
               f"{prof['lidar_offset'][2]:.2f} m up and {prof['lidar_offset'][0]:.2f} m forward (`robot:=ugv`, profile "
               "`configs/robots/ugv.yaml`: extrinsics, self-filter box, footprint, height). The segmentation model was "
-              "trained at the rover's 1.73 m sensor height; scans are shifted to that height before segmentation only.", "",
-              "| World | Scenario | Expected | Passed | Min clearance (static) |", "|---|---|---|---|---|"]
+              "trained at the rover's 1.73 m sensor height; scans are shifted to that height before segmentation only. "
+              f"Navigation grid {prof['terrain'].get('costmap_cell', 0.2)} m (the rover: 0.2 m), so a 1.4 m opening "
+              "keeps its width for the 0.98 m footprint.", ""]
+        tot = sum(len(rs) for _, rs in ugv)
+        L += [f"**{sum(r['passed'] for _, rs in ugv for r in rs)}/{tot} runs passed**, "
+              f"{sum(bool(r.get('drove_into_pedestrian')) for _, rs in ugv for r in rs)} drove into a pedestrian.", "",
+              "| World | Runs passed |", "|---|---|"]
+        for w, rs in ugv:
+            title = "Demo world" if w == "results" else f"Tier {w[-1]}"
+            L.append(f"| {title} | {sum(r['passed'] for r in rs)}/{len(rs)} |")
+        L += ["", "| World | Scenario | Expected | Passed | Min clearance (static) |", "|---|---|---|---|---|"]
         for w, rs in ugv:
             title = "Demo world" if w == "results" else f"Tier {w[-1]}"
             for n in dict.fromkeys(r["scenario"] for r in rs):

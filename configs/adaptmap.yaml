@@ -27,6 +27,8 @@ zones:
 fusion:
   tau_static: 20.0        # weight time-constant for static classes
   tau_dynamic: 0.5        # vehicles / pedestrians fade fast -> no ghost trails
+  hold_radius: 1.0        # m around the sensor (blind disc beside the robot) where ...
+  hold_classes: [vehicle] # ... these decay like static classes: a parked car's side there is below the lowest beam
   max_weight: 10.0        # cap so the map stays responsive
   min_weight: 0.05        # below this a cell is considered unknown
   conf_support: 3.0       # observations needed for full confidence
@@ -37,6 +39,8 @@ fusion:
   clear_samples: 32       # samples per ray
   clear_range: 50.0       # only rays up to this length
   clear_margin: 0.2       # ray must be this far inside the obstacle span (m)
+  thin_clear_max_cell: 0.05  # in zones this fine, the margin shrinks for thin spans ...
+  thin_clear_frac: 0.25   # ... to this fraction of the span (person fragments under 0.4 m were never cleared)
   clear_end_margin: 0.3   # ignore samples this close to the ray's end point (m)
   clear_min_hits: 1
   clear_factor: 0.5       # weight multiplier per scan for contradicted cells

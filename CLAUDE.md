@@ -22,7 +22,7 @@ The method is described in `docs/METHOD.md`; the numbers are in `docs/RESULTS.md
   - `foveated_map.py`: the map (fusion, ray clearing, views, `set_zones`).
   - `preprocess.py`, `segmentation.py`, `terrain.py`, `adaptive.py`, `classes.py`, `config.py`.
   - `motion.py`: pedestrian tracking and the predicted keep-out corridor for Nav2.
-  - `tests/`: 39 pytest tests; CPU-safe, also run by GitHub Actions.
+  - `tests/`: 42 pytest tests; CPU-safe, also run by GitHub Actions.
 - `configs/adaptmap.yaml`: every tunable value (zones, fusion, ray clearing, terrain limits,
   adaptive zones, model).
 - `configs/robots/<name>.yaml`: robot profiles (`rover` default, `ugv`): LiDAR extrinsics, topics,

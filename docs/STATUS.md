@@ -5,7 +5,7 @@ These two files (`CLAUDE.md` + this one) are the full context. **Don't re-explor
 re-run old benchmarks.** Everything below is verified, committed and pushed.
 
 To start the next session:
-1. Continue with **"Not done"** below (all optional).
+1. Nothing is pending; **"Open issues"** below lists known weaknesses, should work continue.
 2. After each item: run `pytest`, write the result JSON to `docs/`, run `python3 tools/make_results.py`,
    update this file, then commit and push. Author PRDXAbe, **no AI attribution**.
 3. Running the Nav2 stack: `ros2 launch adaptmap_nav nav.launch.py rviz:=false`; scenarios:
@@ -39,14 +39,12 @@ separately.
 | v4 evaluated (2026-11-08) | `eval_sim_test.py --only v4`, `eval_bag.py`, `eval_semanticposs.py --seqs 05 --every 2 --out semanticposs_seq05.json` (new options: `--only`, `--seqs`, `--out`) | world 21 **81.0** (v3 89.6, vegetation 19 %), demo world **84.6** (v3 90.4). SemanticPOSS held-out seq 05: pretrained 46.0, v3 + const 43.2, **v4 + const 56.0** (pedestrians 74 vs 8 %), v4 with real intensity **21.2** (calls ~96 % of ground vehicle, on training sequences too; cause unknown, in-training eval only used constant intensity). **Decision: nothing changes** (v3 sim default, pretrained `model_real`). METHOD table + §7 updated |
 | Full nav rerun (2026-11-08) | `data/navdbg/full_eval.sh` on the final code (v3, all nav improvements), log `data/navdbg/full_eval_20261108.log`, `data/tiers_20261108_090756/` | Tiers **86/90** (15, 15, 18, 24, 14 of 15, 15, 18, 24, 18; was 78/90), **0 runs drove into a pedestrian**; speed bump now 3/3. Demo world 14/15. Remaining failures: tier 5 `group_crossing` **0/3** (+1 `full_run`): stops at x ≈ 59 *on* the crossing band (59–62), the group walks into it, never moves off before the 91 s limit; demo `sidewalk_goal_refused` 1/3 touched parked car `car_9` at 1.2 m/s (the 1 s gate made it rarer, not gone). METHOD §6/§7 rewritten |
 
-### Not done ⬜ (next steps, in order)
-1. **Group crossing (tier 5, 0/3):** make the robot yield *before* the crossing band and move off once
-   the group has passed (e.g. a keep-out covering the group's whole crossing path, or a stop line at
-   the corridor's near edge). Debug: `bash data/navdbg/try.sh tier5 3 group_crossing`.
-2. **Curb refusal touches a parked car (demo world, 1/3):** check the run-2 track against the costmap.
-3. Optional: UGV runs ×3 on all tiers; a 0.1 m costmap near the robot for the UGV's 1.4 m opening.
-4. Optional: fix v4's real-intensity failure (e.g. evaluate real data at both intensities during training,
-   lower `--mix`/fewer iterations for sim vegetation), then reconsider v4 + constant intensity as `model_real`.
+| Final fixes + rerun (2026-11-08) | Map: thin obstacle fragments in the 5 cm zone can be ray-cleared (`fusion.thin_clear_*`; ghost heads/shoulders of people held the robot ~100 s); vehicle cells within 1 m of the sensor decay at τ_static (`fusion.hold_*`; car sides below the lowest beam faded in ~2 s). Tier 5 group: same path, ±0.6 s offsets, 6 s waits (was a drifting perpetual stream); scenarios can `sync` to an actor's phase (`nav_scenarios.py`). `run_tier_suite.sh` takes `ROBOT=`; node dumps costmap crops with `ADAPTMAP_DEBUG_DIR=`. Rerun `data/navdbg/final_eval.sh`, logs `data/tiers_rover_20261108_111815/`, UGV `data/tiers_ugv_20261108_140935/` | Rover tiers **84/90** (15, 15, 18, 22, 14), **0 drove into a pedestrian**; group crossing **3/3** (was 0/3), full run 3/3, demo world **15/15** (curb refusal 3/3). UGV 17/18 (only miss: 1.4 m opening). A 0.1 m UGV grid was tried: opening passed but 57/90 overall, reverted. v4 BN recalibration not pursued; v4 not adopted |
+
+### Open issues (not planned)
+1. Tier 4 `speed_bump` 1/3 and tier 5 `occluded_walker` 1/3, `head_on_narrow` 1/3 (one lamp-post touch); all 3/3 in the previous run. Debug: `[ADAPTMAP_DEBUG_DIR=dir] bash data/navdbg/try.sh tier4 3 speed_bump`.
+2. UGV does not pass the 1.4 m opening at the 0.2 m grid.
+3. v4 fails with real intensity (suspect: BatchNorm running stats from mostly constant-intensity scans); `model_real` stays the pretrained model.
 
 ## Where things are
 | Thing | Location |
@@ -67,5 +65,5 @@ separately.
   89.6 vs 49.0.
 - **Real data:** KITTI 19 Hz end to end; SemanticPOSS 43.6 mIoU (pretrained, unseen 40-beam
   sensor).
-- **Navigation:** demo world 14/15; stress test over five worlds of rising difficulty 86/90, never
+- **Navigation:** demo world 15/15; stress test over five worlds of rising difficulty 84/90, never
   driving into a pedestrian. Second robot (1.4 m UGV, no retraining): 17/18 runs. 11.6 min continuous run: no memory growth or slowdown.

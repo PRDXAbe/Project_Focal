@@ -122,6 +122,15 @@ class Runner(Node):
         if math.hypot(self.pose[0] - x, self.pose[1] - y) > 0.5:
             raise RuntimeError(f"rover not at start ({x}, {y}): odometry says {self.pose}")
 
+    def sync(self, actor, phase):
+        """Wait until `actor` (manifest object) is `phase` s into its looped trajectory (sim time), so a scenario
+        meets its pedestrians at the same point of their walk in every run."""
+        period = actor["period"]
+        while True:
+            rclpy.spin_once(self, timeout_sec=0.02)
+            if 0.0 <= (self.stamp - phase) % period < 0.2:
+                return
+
     def run(self, name, gx, gy, expect, limit, stat, acts, road_half=ROAD_HALF, progress=None):
         """progress: optional callback, called each loop with the live metrics (tools/dashboard.py)."""
         self.abort = False
@@ -205,6 +214,7 @@ def main():
     road_half = manifest.get("road_half", ROAD_HALF)
     scenarios = [(c["name"], *map(float, c["start"]), *map(float, c["goal"]), c["expect"] == "reach", c["limit"],
                   c["what"]) for c in manifest["scenarios"]] if "scenarios" in manifest else SCENARIOS
+    syncs = {c["name"]: c["sync"] for c in manifest.get("scenarios", []) if c.get("sync")}
     import os
     robot = a.robot or os.environ.get("ADAPTMAP_ROBOT") or "rover"
     tag = "" if robot == "rover" else f"_{robot}"   # other robots never overwrite the rover's results
@@ -216,6 +226,8 @@ def main():
                 continue
             print(f"== run {run + 1}/{a.repeat} {name}: ({sx}, {sy}) -> ({gx}, {gy}) - {why}", flush=True)
             r.place(sx, sy, syaw)
+            if name in syncs:   # [actor name, phase s]: start at a fixed point of that actor's walk
+                r.sync(next(o for o in manifest["objects"] if o["name"] == syncs[name][0]), float(syncs[name][1]))
             res = r.run(name, gx, gy, expect, limit, stat, acts, road_half)
             res["run"], res["world"] = run, a.world
             res["start"] = [sx, sy, syaw]

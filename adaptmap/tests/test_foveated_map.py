@@ -137,3 +137,20 @@ def test_preprocess_filters():
     assert out.shape == (3, 4)
     assert torch.all(out[:, 3] == CFG["preprocess"]["constant_intensity"])
     assert stats["raw"] == 7
+
+
+def test_vehicle_beside_sensor_is_held_elsewhere_fades():
+    """A parked car's side within hold_radius of the sensor is below the lowest beam: unseen there is no
+    evidence it left, so it decays like a static class. A car 3 m away, or a person beside the robot, still
+    fades at tau_dynamic."""
+    m = make_map()
+    car_near, car_far, ped_near = [0.62, 0.02, 1.0], [3.02, 3.02, 1.0], [0.02, -0.62, 1.0]
+    pts = torch.tensor([car_near, car_far, ped_near])
+    pr = torch.cat([one_hot(2, "vehicle"), one_hot(1, "pedestrian")])
+    m.integrate(pts, pr, [0, 0], 0.0, origin=[0.0, 0.0, 1.73])
+    m.integrate(torch.zeros(0, 3), torch.zeros(0, classes.NUM_CLASSES), [0, 0], 3.0, origin=[0.0, 0.0, 1.73])
+    v = m.layer_view(m.layers[0])
+    ij = lambda x, y: (int((x + 10) / 0.05), int((y + 10) / 0.05))  # noqa: E731
+    assert v["valid"][ij(0.62, 0.02)]        # held
+    assert not v["valid"][ij(3.02, 3.02)]    # fades (tau 0.5 s)
+    assert not v["valid"][ij(0.02, -0.62)]   # people move: not held
