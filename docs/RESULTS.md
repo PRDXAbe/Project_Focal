@@ -112,11 +112,11 @@ With constant intensity v4 is the best model on unseen real data (+10 mIoU over 
 
 | Scenario | Expected | Passed | Time (median) | Distance (median) | Min clearance (static) | Min distance to pedestrians | Rover speed there |
 |---|---|---|---|---|---|---|---|
-| pedestrian crossing | reach | 3/3 ✅ | 25.0 s | 25.1 m | 0.94 m | 0.99 m | 0.00 m/s |
-| around lane car | reach | 3/3 ✅ | 25.8 s | 30.2 m | 0.51 m | – | – |
-| sidewalk goal refused | refuse | 2/3 ❌ | 61.0 s | 30.8 m | 0.00 m | – | – |
-| long route | reach | 3/3 ✅ | 46.3 s | 54.8 m | 1.17 m | – | – |
-| u turn | reach | 3/3 ✅ | 19.6 s | 20.2 m | 0.99 m | – | – |
+| pedestrian crossing | reach | 3/3 ✅ | 23.7 s | 25.0 m | 1.02 m | 0.53 m | 0.00 m/s |
+| around lane car | reach | 3/3 ✅ | 25.8 s | 30.2 m | 0.60 m | – | – |
+| sidewalk goal refused | refuse | 2/3 ❌ | 61.0 s | 43.2 m | 0.00 m | – | – |
+| long route | reach | 3/3 ✅ | 46.3 s | 54.8 m | 1.31 m | – | – |
+| u turn | reach | 3/3 ✅ | 19.5 s | 20.2 m | 0.99 m | – | – |
 
 ## Long run (stability)
 
@@ -130,64 +130,64 @@ Nav2 demo suite x3 driving continuously (sim + AdaptMap + Nav2, no visualisation
 |---|---|---|---|
 | 1 | Open road | 5 | 15/15 |
 | 2 | Parked street | 5 | 15/15 |
-| 3 | Pedestrian zone | 6 | 16/18 |
-| 4 | Obstacle course | 8 | 22/24 |
-| 5 | Chaos | 6 | 10/18 |
+| 3 | Pedestrian zone | 6 | 18/18 |
+| 4 | Obstacle course | 8 | 24/24 |
+| 5 | Chaos | 6 | 14/18 |
 
 ### Tier 1: Open road
 
 | Scenario | What it tests | Expected | Passed | Time (median) | Min clearance (static) | Min distance to pedestrians |
 |---|---|---|---|---|---|---|
-| straight | 45 m straight on a clear lane | reach | 3/3 ✅ | 37.9 s | 0.86 m (car_0) | – |
-| crate in lane | a crate sits on the drive line at x = 25 | reach | 3/3 ✅ | 34.0 s | 0.86 m (crate_line) | – |
-| lane change | goal in the opposite lane | reach | 3/3 ✅ | 37.8 s | 1.62 m (pole_5_1) | – |
-| u turn | turn around inside the 8 m road | reach | 3/3 ✅ | 19.5 s | 1.77 m (car_1) | – |
-| sidewalk goal | goal behind a 15 cm curb | refuse | 3/3 ✅ | 61.0 s | 2.05 m (pole_5_1) | – |
+| straight | 45 m straight on a clear lane | reach | 3/3 ✅ | 37.9 s | 1.16 m (car_0) | – |
+| crate in lane | a crate sits on the drive line at x = 25 | reach | 3/3 ✅ | 33.9 s | 0.73 m (crate_line) | – |
+| lane change | goal in the opposite lane | reach | 3/3 ✅ | 37.4 s | 1.75 m (car_0) | – |
+| u turn | turn around inside the 8 m road | reach | 3/3 ✅ | 19.5 s | 1.71 m (car_1) | – |
+| sidewalk goal | goal behind a 15 cm curb | refuse | 3/3 ✅ | 61.0 s | 2.18 m (pole_5_1) | – |
 
 ### Tier 2: Parked street
 
 | Scenario | What it tests | Expected | Passed | Time (median) | Min clearance (static) | Min distance to pedestrians |
 |---|---|---|---|---|---|---|
-| double parked | an SUV double-parked in the right lane at x = 33 | reach | 3/3 ✅ | 25.4 s | 0.57 m (double_parked) | -0.02 m at 0.0 m/s |
-| slow crosser | a pedestrian crosses at 0.7 m/s at x = 40 | reach | 3/3 ✅ | 23.8 s | 0.44 m (pl_2) | – |
-| narrow gap | crates and parked cars leave a single 1.7 m gap | reach | 3/3 ✅ | 17.9 s | 0.35 m (gap_b) | – |
-| park between cars | goal in a 6 m gap between parked cars | reach | 3/3 ✅ | 10.1 s | 0.75 m (pr_6) | – |
-| long route | 118 m past everything above | reach | 3/3 ✅ | 99.3 s | 0.34 m (gap_b) | 1.05 m at 0.0 m/s |
+| double parked | an SUV double-parked in the right lane at x = 33 | reach | 3/3 ✅ | 22.4 s | 0.58 m (double_parked) | 0.85 m at 0.0 m/s |
+| slow crosser | a pedestrian crosses at 0.7 m/s at x = 40 | reach | 3/3 ✅ | 24.0 s | 0.41 m (pl_3) | 0.40 m at 0.0 m/s |
+| narrow gap | crates and parked cars leave a single 1.7 m gap | reach | 3/3 ✅ | 17.9 s | 0.36 m (gap_b) | – |
+| park between cars | goal in a 6 m gap between parked cars | reach | 3/3 ✅ | 10.1 s | 0.73 m (pr_6) | – |
+| long route | 118 m past everything above | reach | 3/3 ✅ | 99.2 s | 0.31 m (gap_b) | 0.81 m at 0.0 m/s |
 
 ### Tier 3: Pedestrian zone
 
 | Scenario | What it tests | Expected | Passed | Time (median) | Min clearance (static) | Min distance to pedestrians |
 |---|---|---|---|---|---|---|
-| two crossers | two people cross in opposite directions at x = 20 and 23 | reach | 2/3 ❌ | 39.1 s | 2.46 m (pole_1_-1) | -0.32 m at 0.0 m/s |
-| head on | a person walks down the rover's lane, towards it half the time | reach | 3/3 ✅ | 40.3 s | 2.58 m (pole_6_-1) | 0.40 m at 0.0 m/s |
-| walker ahead | a person walks ahead in the left lane at 0.8 m/s | reach | 3/3 ✅ | 39.6 s | 2.52 m (pole_6_1) | 0.32 m at 0.0 m/s |
-| runner | a runner crosses at 2 m/s at x = 125 | reach | 3/3 ✅ | 29.7 s | 2.79 m (pole_9_-1) | -0.21 m at 0.0 m/s |
-| stops in lane | a person crosses at x = 145 and stands 6 s in the lane | reach | 3/3 ✅ | 26.7 s | 2.16 m (pole_10_-1) | 0.21 m at 0.0 m/s |
-| diagonal | a person crosses diagonally (x 160 -> 172) | reach | 2/3 ❌ | 31.7 s | 2.18 m (pole_12_-1) | -0.26 m at 0.0 m/s |
+| two crossers | two people cross in opposite directions at x = 20 and 23 | reach | 3/3 ✅ | 37.4 s | 2.21 m (pole_3_-1) | -0.34 m at 0.0 m/s |
+| head on | a person walks down the rover's lane, towards it half the time | reach | 3/3 ✅ | 38.1 s | 2.58 m (pole_6_-1) | 0.25 m at 0.0 m/s |
+| walker ahead | a person walks ahead in the left lane at 0.8 m/s | reach | 3/3 ✅ | 40.9 s | 2.50 m (pole_6_1) | 0.71 m at 0.0 m/s |
+| runner | a runner crosses at 2 m/s at x = 125 | reach | 3/3 ✅ | 33.3 s | 2.09 m (pole_9_-1) | -0.11 m at 0.0 m/s |
+| stops in lane | a person crosses at x = 145 and stands 6 s in the lane | reach | 3/3 ✅ | 30.0 s | 2.59 m (pole_10_-1) | -0.17 m at 0.0 m/s |
+| diagonal | a person crosses diagonally (x 160 -> 172) | reach | 3/3 ✅ | 28.2 s | 2.98 m (pole_11_-1) | – |
 
 ### Tier 4: Obstacle course
 
 | Scenario | What it tests | Expected | Passed | Time (median) | Min clearance (static) | Min distance to pedestrians |
 |---|---|---|---|---|---|---|
 | narrow passage | a wall across the road with a 1.4 m opening | reach | 3/3 ✅ | 25.4 s | 0.26 m (passage_r) | – |
-| gap too narrow | a wall across the road with only a 0.55 m gap | refuse | 3/3 ✅ | 30.0 s | 0.18 m (passage_r) | – |
-| low box | a 20 cm box on the drive line (lost from view up close) | reach | 3/3 ✅ | 22.2 s | 0.60 m (low_box) | – |
-| thin pole | a 4 cm thin pole on the drive line | reach | 3/3 ✅ | 20.5 s | 0.58 m (thin_pole) | – |
-| speed bump | a 6 cm bump across the road: drive over it | reach | 1/3 ❌ | 71.0 s | 2.99 m (pole_9_-1) | – |
-| curb wall | a 15 cm wall across the whole road: cannot climb | refuse | 3/3 ✅ | 61.0 s | 2.34 m (pole_9_-1) | – |
-| overhang high | a bar across the road 2.2 m up: drive under | reach | 3/3 ✅ | 22.1 s | 2.82 m (pole_12_-1) | – |
-| overhang low | a bar 1.3 m up: the 1.8 m LiDAR mast would hit it | refuse | 3/3 ✅ | 41.7 s | 3.32 m (pole_13_-1) | – |
+| gap too narrow | a wall across the road with only a 0.55 m gap | refuse | 3/3 ✅ | 61.0 s | 0.12 m (passage_r) | – |
+| low box | a 20 cm box on the drive line (lost from view up close) | reach | 3/3 ✅ | 22.3 s | 0.85 m (low_box) | – |
+| thin pole | a 4 cm thin pole on the drive line | reach | 3/3 ✅ | 20.5 s | 0.38 m (thin_pole) | – |
+| speed bump | a 6 cm bump across the road: drive over it | reach | 3/3 ✅ | 48.2 s | 2.57 m (pole_9_-1) | – |
+| curb wall | a 15 cm wall across the whole road: cannot climb | refuse | 3/3 ✅ | 61.0 s | 2.58 m (pole_10_1) | – |
+| overhang high | a bar across the road 2.2 m up: drive under | reach | 3/3 ✅ | 22.0 s | 2.94 m (pole_12_-1) | – |
+| overhang low | a bar 1.3 m up: the 1.8 m LiDAR mast would hit it | refuse | 3/3 ✅ | 41.7 s | 3.48 m (pole_13_-1) | – |
 
 ### Tier 5: Chaos
 
 | Scenario | What it tests | Expected | Passed | Time (median) | Min clearance (static) | Min distance to pedestrians |
 |---|---|---|---|---|---|---|
-| occluded walker | a person steps out from behind a parked car at x = 26.5 | reach | 3/3 ✅ | 35.1 s | 0.73 m (pl_3) | 0.08 m at 0.0 m/s |
-| chicane | crates force an S-bend at x = 40 and 47 | reach | 3/3 ✅ | 19.7 s | 0.34 m (chicane_b) | – |
-| group crossing | three people cross together at x = 59-62 | reach | 0/3 ❌ | 91.0 s | 0.94 m (pr_6) | -0.35 m at 0.0 m/s |
-| head on narrow | a person walks down the single lane; a 25 cm crate at x = 75 | reach | 1/3 ❌ | 51.0 s | 0.00 m (pl_8) | -0.35 m at 0.0 m/s |
-| stopper | a person stops 5 s in the lane at x = 108 | reach | 2/3 ❌ | 32.1 s | 0.70 m (pl_9) | -0.34 m at 0.0 m/s |
-| full run | 125 m through all of the above | reach | 1/3 ❌ | 186.1 s | 0.05 m (pl_7) | -0.35 m at 0.0 m/s |
+| occluded walker | a person steps out from behind a parked car at x = 26.5 | reach | 3/3 ✅ | 30.7 s | 0.54 m (pr_3) | 0.16 m at 0.0 m/s |
+| chicane | crates force an S-bend at x = 40 and 47 | reach | 3/3 ✅ | 19.6 s | 0.32 m (chicane_b) | – |
+| group crossing | three people cross together at x = 59-62 | reach | 0/3 ❌ | 91.0 s | 0.89 m (pr_6) | -0.35 m at 0.0 m/s |
+| head on narrow | a person walks down the single lane; a 25 cm crate at x = 75 | reach | 3/3 ✅ | 38.6 s | 0.41 m (pl_7) | -0.35 m at 0.0 m/s |
+| stopper | a person stops 5 s in the lane at x = 108 | reach | 3/3 ✅ | 22.9 s | 0.49 m (pl_9) | 0.63 m at 0.0 m/s |
+| full run | 125 m through all of the above | reach | 2/3 ❌ | 217.7 s | 0.17 m (pl_9) | -0.35 m at 0.0 m/s |
 
 ## Second robot: a larger UGV (no retraining)
 

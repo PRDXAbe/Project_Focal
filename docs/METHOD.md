@@ -380,28 +380,26 @@ from 7.1 to 9.6 ms.
 runs at 52 ms per scan (19 Hz) with the pretrained model.
 
 **Autonomous navigation.** Nav2 (SmacPlanner2D + Regulated Pure Pursuit) driving on the AdaptMap
-costmap in the demo world, 5 scripted scenarios × 3 runs: **14/15 passed** (15/15 with the earlier v2
-model; the miss is the robot yielding on the crossing line, see below). The scenarios are:
+costmap in the demo world, 5 scripted scenarios × 3 runs: **14/15 passed** (rerun 2026-11-08 on the
+final code; the miss is one curb-refusal run in which the robot, manoeuvring near the curb, touched a
+parked car). The scenarios are:
 a pedestrian crossing the road, a parked car blocking the lane, a goal behind a 15 cm curb (must be
 refused), a 55 m route past crates and cars, and a U-turn inside the road. Pass means the expected
 outcome, never leaving the road, no contact with static obstacles and no contact with a pedestrian
 while moving.
 
 **Stress test: five worlds of rising difficulty** (`tools/make_tier_worlds.py`, 30 scenarios × 3
-runs): **78/90 runs passed**. By world: open road 15/15, parked street 13/15, pedestrian zone
-16/18, obstacle course 24/24, chaos 10/18. **In none of the 90 runs did the robot drive into a
-pedestrian.** It handles a 1.4 m opening, a 4 cm pole, a 20 cm box, a 6 cm bump (driven over), a
-pedestrian stepping out from behind a parked car, a runner, a person stopping in the lane, and
-refuses every goal that has no safe way (curb, 0.55 m gap, 15 cm wall across the road, 1.3 m
-overhang). The failures, by cause:
-- *stuck after stopping in a tight corridor* (6 runs): having yielded between a parked car and an
-  obstacle, the controller does not move off again (Nav2 local planner tuning);
-- *yields on the crossing line* (2 runs): the person then walks into the stopped robot and Nav2
-  aborts the goal;
-- *contact with a 25 cm crate* (2 runs) while manoeuvring around a person walking head-on in a
-  single lane, and *contact with a parked car* (1 run) in the narrow street;
-- *over-cautious with a 2 m/s runner* (1 run): the long predicted corridor of a person running back
-  and forth blocks the road until the time limit.
+runs, rerun 2026-11-08 on the final code): **86/90 runs passed** (78/90 before the navigation
+improvements of §5). By world: open road 15/15, parked street 15/15, pedestrian zone 18/18, obstacle
+course 24/24, chaos 14/18. **In none of the 90 runs did the robot drive into a pedestrian.** It
+handles a 1.4 m opening, a 4 cm pole, a 20 cm box, a 6 cm bump (driven over), a pedestrian stepping
+out from behind a parked car, two people crossing, a runner, a person walking head-on down a single
+lane, a person stopping in the lane, and refuses every goal that has no safe way (curb, 0.55 m gap,
+15 cm wall across the road, 1.3 m overhang). The failures, all in the chaos world:
+- *group crossing* (3 of 3 runs, plus 1 of the 3 125 m full runs that include it): three people
+  crossing together. The robot yields but stops with its front on the crossing band; the group then
+  walks into the stopped robot (the simulated pedestrians do not avoid anything), and the robot does
+  not move off again before the time limit.
 
 ## 7. Limitations of this prototype
 
@@ -416,13 +414,12 @@ overhang). The failures, by cause:
 - Weakest classes: vegetation (61–72 % IoU in simulation) and pedestrians in an unfamiliar world
   (65 %).
 - The pedestrian prediction is a constant-velocity extrapolation of the map's own blobs, with no
-  intent model. The robot sometimes yields *on* a crossing line instead of before it, and is
-  over-cautious with fast runners (the predicted corridor scales with speed).
-- In tight spaces (a single lane between parked cars and obstacles) Nav2's controller can fail to
-  move off again after yielding, and in two runs the robot touched a low (25 cm) crate while
-  manoeuvring there. The stall is local-planner behaviour; for the crate contacts it is not yet
-  established whether the planner cut too close or the crate faded from the map while it sat inside
-  the blind disc next to the robot.
+  intent model. Facing a group crossing together, the robot yields too late: it stops on the
+  crossing band and then does not move off again (0/3 in the stress test). Stopping earlier needs
+  the keep-out corridor to cover the group's whole crossing, not just the next 2.5 s.
+- Close to static obstacles the margin is not yet watertight: in 1 of 3 demo-world curb-refusal runs
+  the robot touched a parked car while manoeuvring near the curb (the 1 s planner-margin gate of §5
+  made this rarer but did not remove it).
 - Low obstacles that a stationary robot can no longer see (inside the blind disc) decay with
   τ_static = 20 s. The sensor cannot see the ground within 3.7 m, or the top of a 25 cm object within
   3.2 m; a robot *placed* closer than that to a low obstacle never sees it (one stress-test scenario

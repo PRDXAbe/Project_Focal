@@ -37,15 +37,15 @@ separately.
 | P9 | Robot profiles `configs/robots/{rover,ugv}.yaml` (extrinsics, topics, self box, footprint, height, Nav2 footprint) selected by `robot:=` / `--robot` / `ROBOT=ugv bash tools/dashboard.sh`; 1.40 × 0.95 m 4-wheel skid-steer UGV (`ros2_ws/src/adaptmap_sim/robots/ugv/rover/`), LiDAR 1.30 m up, 0.35 m ahead; scans shifted to the model's 1.73 m for segmentation only (`85875c9`) | UGV, 1 run each, no retraining: tier 1 5/5, demo world 5/5, tier 4 7/8 (stops before the 1.4 m opening without contact: 0.2 m costmap cells eat it; radius 0.50 didn't help) → `docs/nav_*_ugv.json`, RESULTS section |
 | v4 mixed fine-tune (trained, not evaluated) | `tools/finetune.py --real data/real/semanticposs/dataset --iters 12000 --z-jitter 0.25` (sim + SemanticPOSS 00–04, test 05, intensity dropout 0.5, set-valued ground loss) → `checkpoints/minkunet_adapt10_v4.pth`, log `data/finetune_model_v4.log` (82 min) | Best (iter 10000; in-training eval, 60 scans, constant intensity): sim world 21 **79.9** (v3 89.6 on all scans; vegetation only 19 %), SemanticPOSS 05 **58.3** (7 merged classes; same protocol at step 0: 42.0). Later steps overfit the sim score (74.5 at 12000) |
 | v4 evaluated (2026-11-08) | `eval_sim_test.py --only v4`, `eval_bag.py`, `eval_semanticposs.py --seqs 05 --every 2 --out semanticposs_seq05.json` (new options: `--only`, `--seqs`, `--out`) | world 21 **81.0** (v3 89.6, vegetation 19 %), demo world **84.6** (v3 90.4). SemanticPOSS held-out seq 05: pretrained 46.0, v3 + const 43.2, **v4 + const 56.0** (pedestrians 74 vs 8 %), v4 with real intensity **21.2** (calls ~96 % of ground vehicle, on training sequences too; cause unknown, in-training eval only used constant intensity). **Decision: nothing changes** (v3 sim default, pretrained `model_real`). METHOD table + §7 updated |
+| Full nav rerun (2026-11-08) | `data/navdbg/full_eval.sh` on the final code (v3, all nav improvements), log `data/navdbg/full_eval_20261108.log`, `data/tiers_20261108_090756/` | Tiers **86/90** (15, 15, 18, 24, 14 of 15, 15, 18, 24, 18; was 78/90), **0 runs drove into a pedestrian**; speed bump now 3/3. Demo world 14/15. Remaining failures: tier 5 `group_crossing` **0/3** (+1 `full_run`): stops at x ≈ 59 *on* the crossing band (59–62), the group walks into it, never moves off before the 91 s limit; demo `sidewalk_goal_refused` 1/3 touched parked car `car_9` at 1.2 m/s (the 1 s gate made it rarer, not gone). METHOD §6/§7 rewritten |
 
 ### Not done ⬜ (next steps, in order)
-1. **Full navigation rerun on the final code** (about 90 min): `bash tools/run_tier_suite.sh 3 1 2 3 4 5`,
-   then the demo world (`nav.launch.py rviz:=false` + `nav_scenarios.py --repeat 3`); the script used is
-   `data/navdbg/full_eval.sh`. Then rewrite METHOD §6 (stress-test paragraph + failure list, still the
-   old 78/90 text) and §7 nav bullets, the "Stress test" row above and the headline numbers.
-   Debug helper: `[ROBOT=ugv] bash data/navdbg/try.sh WORLD REPEAT [SCENARIO]`.
-2. Optional: UGV runs ×3 on all tiers; a 0.1 m costmap near the robot for the UGV's 1.4 m opening.
-3. Optional: fix v4's real-intensity failure (e.g. evaluate real data at both intensities during training,
+1. **Group crossing (tier 5, 0/3):** make the robot yield *before* the crossing band and move off once
+   the group has passed (e.g. a keep-out covering the group's whole crossing path, or a stop line at
+   the corridor's near edge). Debug: `bash data/navdbg/try.sh tier5 3 group_crossing`.
+2. **Curb refusal touches a parked car (demo world, 1/3):** check the run-2 track against the costmap.
+3. Optional: UGV runs ×3 on all tiers; a 0.1 m costmap near the robot for the UGV's 1.4 m opening.
+4. Optional: fix v4's real-intensity failure (e.g. evaluate real data at both intensities during training,
    lower `--mix`/fewer iterations for sim vegetation), then reconsider v4 + constant intensity as `model_real`.
 
 ## Where things are
@@ -67,5 +67,5 @@ separately.
   89.6 vs 49.0.
 - **Real data:** KITTI 19 Hz end to end; SemanticPOSS 43.6 mIoU (pretrained, unseen 40-beam
   sensor).
-- **Navigation:** demo world 14/15; stress test over five worlds of rising difficulty 78/90, never
+- **Navigation:** demo world 14/15; stress test over five worlds of rising difficulty 86/90, never
   driving into a pedestrian. Second robot (1.4 m UGV, no retraining): 17/18 runs. 11.6 min continuous run: no memory growth or slowdown.
