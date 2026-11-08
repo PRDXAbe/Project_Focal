@@ -62,5 +62,21 @@
    "other_obstacle": 0.812
   },
   "scans": 245
+ },
+ {
+  "model": "fine-tuned v4: mixed sim + SemanticPOSS",
+  "miou": 0.8096,
+  "iou": {
+   "road": 0.972,
+   "sidewalk_curb": 0.962,
+   "terrain": 0.871,
+   "vegetation": 0.191,
+   "building_wall": 0.979,
+   "pole": 0.948,
+   "vehicle": 0.969,
+   "pedestrian": 0.597,
+   "other_obstacle": 0.799
+  },
+  "scans": 245
  }
 ]

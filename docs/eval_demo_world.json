@@ -66,5 +66,22 @@
    "pedestrian": 0.7831552624702454,
    "other_obstacle": 0.9690360426902771
   }
+ },
+ {
+  "model": "fine-tuned v4 (mixed sim + SemanticPOSS)",
+  "scans": 131,
+  "accuracy": 0.9827213883399963,
+  "miou": 0.8461810350418091,
+  "iou": {
+   "road": 0.9856309294700623,
+   "sidewalk_curb": 0.9663476943969727,
+   "terrain": 0.7987916469573975,
+   "vegetation": 0.41470205783843994,
+   "building_wall": 0.9777837991714478,
+   "pole": 0.8979308009147644,
+   "vehicle": 0.9845749735832214,
+   "pedestrian": 0.6274041533470154,
+   "other_obstacle": 0.9624629616737366
+  }
  }
 ]

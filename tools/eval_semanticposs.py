@@ -49,6 +49,8 @@ def main():
     ap.add_argument("--config")
     ap.add_argument("--name", default="pretrained SemanticKITTI MinkUNet-34")
     ap.add_argument("--no-write", action="store_true")
+    ap.add_argument("--seqs", help="comma-separated sequences (default all); v4 trained on 00-04, so use 05 for it")
+    ap.add_argument("--out", default="semanticposs_results.json", help="result list in docs/")
     ap.add_argument("--const-intensity", type=float, default=None, help="replace intensity (models trained on sim data)")
     a = ap.parse_args()
     cfg = load_config()
@@ -63,6 +65,8 @@ def main():
     conf = torch.zeros(E, E, dtype=torch.long, device="cuda")
     n = 0
     for seq in sorted((Path(a.root) / "sequences").glob("*")):
+        if a.seqs and seq.name not in a.seqs.split(","):
+            continue
         for b in sorted((seq / "velodyne").glob("*.bin"))[:: a.every]:
             p = np.fromfile(b, np.float32).reshape(-1, 4).copy()
             p[:, 3] /= 255.0
@@ -86,7 +90,7 @@ def main():
     res = {"model": a.name, "scans": n, "accuracy": acc, "miou": miou, "iou": {EVAL[i]: float(iou[i]) for i in range(E)}}
     print(json.dumps(res))
     if not a.no_write:
-        out = ROOT / "docs" / "semanticposs_results.json"
+        out = ROOT / "docs" / a.out
         allres = json.loads(out.read_text()) if out.exists() else []
         allres = [r for r in allres if r["model"] != a.name] + [res]
         out.write_text(json.dumps(allres, indent=1))

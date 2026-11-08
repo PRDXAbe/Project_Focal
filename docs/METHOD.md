@@ -374,6 +374,7 @@ from 7.1 to 9.6 ms.
 | Held-out sim world (seed 21, 245 scans) | 49.0 | **89.6** |
 | Held-out demo world (recorded lap) | 51.4 | **90.4** |
 | SemanticPOSS (real, 40-beam, campus; ground merged) | **43.6** | 38.3 (v2, constant intensity) |
+| SemanticPOSS held-out seq. 05 (250 scans) | 46.0 | 43.2 (v3, constant intensity); **56.0** (v4 mixed, constant intensity) |
 
 **Real data.** KITTI raw drive 0005 (154 real HDL-64 scans with GPS/IMU poses): the full pipeline
 runs at 52 ms per scan (19 Hz) with the pretrained model.
@@ -408,7 +409,10 @@ overhang). The failures, by cause:
   used.
 - The sim model is trained with constant intensity and is weaker than the pretrained model on
   real data (SemanticPOSS 38.3 vs 43.6 mIoU); real sensors use the pretrained model. A mixed
-  sim + real fine-tune would give one model for both.
+  sim + SemanticPOSS fine-tune (v4) is the best model on held-out real data when fed constant
+  intensity (56.0 vs 46.0 mIoU, pedestrians 74 vs 8 %), but it fails with real intensity (ground
+  called vehicle) and loses 9 points in simulation (81.0 vs 89.6, vegetation 19 %), so it is not
+  used yet. One model for both remains open.
 - Weakest classes: vegetation (61–72 % IoU in simulation) and pedestrians in an unfamiliar world
   (65 %).
 - The pedestrian prediction is a constant-velocity extrapolation of the map's own blobs, with no

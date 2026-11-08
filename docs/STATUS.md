@@ -1,4 +1,4 @@
-# Project status, last updated 2026-11-02
+# Project status, last updated 2026-11-08
 
 ## ▶ Resume here (new conversation)
 These two files (`CLAUDE.md` + this one) are the full context. **Don't re-explore the codebase or
@@ -36,24 +36,22 @@ separately.
 | Nav improvements | From the stress test (`8b39a50`, `8afa3e3`): people are timing constraints for the planner (`/adaptmap/costmap_plan`: keep-outs costly, not lethal; robot_radius 0.40 so no detours through curb gaps), controller `failure_tolerance` 20 s (wait out a crossing group), keep-outs seeded only from person cells seen within 0.3 s (a walker's fading trail blocks nothing), decay at the expected rate under the class probabilities, the driven trail counts as known ground (recoveries no longer abort on the blind disc), corridor radius 1.0 m, planner margin around the footprint only for cells not seen for 1 s (without that gate the rover crept into a parked car in 1 of 3 curb-refusal runs; after: 3/3, 1.4 m clear). tier5 crate start moved out of the blind disc; `make_tier_worlds.py` checks it | Full eval *before* the 1 s gate: tiers **78/90** (15, 15, 16, 22, 10 of 15, 15, 18, 24, 18), demo world 14/15. Parked street 13 → 15/15; speed bump 3 → 1/3 (stalls with its front against the bump in every run old and new; physics). After the gate: curb refusal 3/3, tier 5 8/12 (was 10/18). 39 tests |
 | P9 | Robot profiles `configs/robots/{rover,ugv}.yaml` (extrinsics, topics, self box, footprint, height, Nav2 footprint) selected by `robot:=` / `--robot` / `ROBOT=ugv bash tools/dashboard.sh`; 1.40 × 0.95 m 4-wheel skid-steer UGV (`ros2_ws/src/adaptmap_sim/robots/ugv/rover/`), LiDAR 1.30 m up, 0.35 m ahead; scans shifted to the model's 1.73 m for segmentation only (`85875c9`) | UGV, 1 run each, no retraining: tier 1 5/5, demo world 5/5, tier 4 7/8 (stops before the 1.4 m opening without contact: 0.2 m costmap cells eat it; radius 0.50 didn't help) → `docs/nav_*_ugv.json`, RESULTS section |
 | v4 mixed fine-tune (trained, not evaluated) | `tools/finetune.py --real data/real/semanticposs/dataset --iters 12000 --z-jitter 0.25` (sim + SemanticPOSS 00–04, test 05, intensity dropout 0.5, set-valued ground loss) → `checkpoints/minkunet_adapt10_v4.pth`, log `data/finetune_model_v4.log` (82 min) | Best (iter 10000; in-training eval, 60 scans, constant intensity): sim world 21 **79.9** (v3 89.6 on all scans; vegetation only 19 %), SemanticPOSS 05 **58.3** (7 merged classes; same protocol at step 0: 42.0). Later steps overfit the sim score (74.5 at 12000) |
+| v4 evaluated (2026-11-08) | `eval_sim_test.py --only v4`, `eval_bag.py`, `eval_semanticposs.py --seqs 05 --every 2 --out semanticposs_seq05.json` (new options: `--only`, `--seqs`, `--out`) | world 21 **81.0** (v3 89.6, vegetation 19 %), demo world **84.6** (v3 90.4). SemanticPOSS held-out seq 05: pretrained 46.0, v3 + const 43.2, **v4 + const 56.0** (pedestrians 74 vs 8 %), v4 with real intensity **21.2** (calls ~96 % of ground vehicle, on training sequences too; cause unknown, in-training eval only used constant intensity). **Decision: nothing changes** (v3 sim default, pretrained `model_real`). METHOD table + §7 updated |
 
 ### Not done ⬜ (next steps, in order)
-1. **Evaluate v4 properly:** `tools/eval_sim_test.py` (world 21, all scans), `tools/eval_bag.py` (demo
-   world), `tools/eval_semanticposs.py` (real intensity and constant 0.25), JSON to `docs/`,
-   `make_results.py`. Decide: probably `model_real` only (sim vegetation 19 % vs v3's), unless a
-   retrain with a lower `--mix` or fewer iterations keeps sim vegetation. Then update METHOD §7 (the
-   "mixed fine-tune would give one model" bullet).
-2. **Full navigation rerun on the final code** (about 90 min): `bash tools/run_tier_suite.sh 3 1 2 3 4 5`,
+1. **Full navigation rerun on the final code** (about 90 min): `bash tools/run_tier_suite.sh 3 1 2 3 4 5`,
    then the demo world (`nav.launch.py rviz:=false` + `nav_scenarios.py --repeat 3`); the script used is
    `data/navdbg/full_eval.sh`. Then rewrite METHOD §6 (stress-test paragraph + failure list, still the
    old 78/90 text) and §7 nav bullets, the "Stress test" row above and the headline numbers.
    Debug helper: `[ROBOT=ugv] bash data/navdbg/try.sh WORLD REPEAT [SCENARIO]`.
-3. Optional: UGV runs ×3 on all tiers; a 0.1 m costmap near the robot for the UGV's 1.4 m opening.
+2. Optional: UGV runs ×3 on all tiers; a 0.1 m costmap near the robot for the UGV's 1.4 m opening.
+3. Optional: fix v4's real-intensity failure (e.g. evaluate real data at both intensities during training,
+   lower `--mix`/fewer iterations for sim vegetation), then reconsider v4 + constant intensity as `model_real`.
 
 ## Where things are
 | Thing | Location |
 |---|---|
-| Models | `checkpoints/minkunet.pth` (pretrained, real data); `minkunet_adapt10_v1.pth` (6 worlds), `_v2.pth` (12 worlds + distillation), `_v3.pth` (v2 recipe on corrected labels; **config default**), `_v4.pth` (mixed sim + SemanticPOSS, not yet evaluated), `minkunet_adapt10.pth` = copy of v2. Training logs `data/finetune_model_v{1,2,3,4}.log`, histories `checkpoints/minkunet_adapt10_v*.json` |
+| Models | `checkpoints/minkunet.pth` (pretrained, real data); `minkunet_adapt10_v1.pth` (6 worlds), `_v2.pth` (12 worlds + distillation), `_v3.pth` (v2 recipe on corrected labels; **config default**), `_v4.pth` (mixed sim + SemanticPOSS; evaluated, not used: fails with real intensity), `minkunet_adapt10.pth` = copy of v2. Training logs `data/finetune_model_v{1,2,3,4}.log`, histories `checkpoints/minkunet_adapt10_v*.json` |
 | Sim training data | `data/sim_adapt/sequences/urban_s{11..16,31..36}` (4,139 scans, 11 GB), test `data/sim_adapt_test/sequences/urban_s21` (245) |
 | Real data | `data/real/kitti_raw/2011_09_26/...drive_0005_sync`, `data/real/semanticposs/dataset` |
 | Demo-world eval bag | `data/demo_20261010_212110/bag` |

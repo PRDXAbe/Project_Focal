@@ -7,6 +7,7 @@ Inputs (each optional; missing sections are skipped):
   docs/eval_world21.json          tools/eval_sim_test.py        held-out world (seed 21)
   docs/eval_demo_world.json       tools/eval_bag.py --json      second held-out world
   docs/semanticposs_results.json  tools/eval_semanticposs.py    real labelled data
+  docs/semanticposs_seq05.json    tools/eval_semanticposs.py --seqs 05 --out semanticposs_seq05.json
   docs/kitti_*_summary.json       tools/run_dataset.py          real KITTI drive
   docs/nav_results.json           tools/nav_scenarios.py        Nav2 scenarios (demo world)
   docs/nav_tier{1..5}.json        tools/run_tier_suite.sh       Nav2 stress test, five worlds
@@ -106,7 +107,8 @@ def main():
               "(vehicle 48 %). v3 retrains the v2 recipe on the corrected labels: +1.2 mIoU here and +0.2 on the demo "
               "world, and it labels car sides next to the robot correctly, which v2 did not: in the navigation stress test v2 "
               "called 30 % of a parked car's points road from beside it and the robot froze in an empty lane. v3 is the "
-              "default; v2 is 2 points better on demo-world pedestrians.", ""]
+              "default; v2 is 2 points better on demo-world pedestrians. v4 adds SemanticPOSS sequences 00–04 to the "
+              "training mix (`--real`); it loses 9 points here, mostly vegetation (19 %), so it is not the sim default.", ""]
     demo = load("eval_demo_world.json")
     if demo:
         L += ["### Simulation, demo world (second held-out world, recorded lap)", ""]
@@ -117,6 +119,16 @@ def main():
               "SemanticPOSS has one 'ground' class, so road / sidewalk / terrain are merged. Different sensor (40 beams) "
               "and scene type (campus) than the KITTI training data; no SemanticPOSS data was used for training.", ""]
         L += iou_table([(r["model"], r["iou"], r["miou"]) for r in poss], ORDER) + [""]
+    p05 = load("semanticposs_seq05.json")
+    if p05:
+        L += ["#### SemanticPOSS held-out sequence 05 (pretrained vs mixed fine-tune v4)", "",
+              f"v4 was trained on sim + SemanticPOSS sequences 00–04, so all models are scored here on sequence 05 only "
+              f"({p05[0]['scans']} scans, every 2nd; `tools/eval_semanticposs.py --seqs 05 --every 2 --out semanticposs_seq05.json`).", ""]
+        L += iou_table([(r["model"], r["iou"], r["miou"]) for r in p05], ORDER)
+        L += ["", "With constant intensity v4 is the best model on unseen real data (+10 mIoU over the pretrained model, "
+              "pedestrians 8 → 74 %). With the sensor's real intensity it fails: it calls ~96 % of ground points vehicle, "
+              "on the training sequences too. Training only checked real data at constant intensity, so this went "
+              "unnoticed; the cause is not yet known. Real sensors therefore keep the pretrained model (`model_real`).", ""]
 
     for f in sorted(glob.glob(str(D / "kitti_*_summary.json"))):
         k = json.loads(Path(f).read_text())
